@@ -1,233 +1,182 @@
 import numpy as np
 from nilearn.datasets import fetch_surf_fsaverage
 from nilearn import surface
+import pyvista as pv
+from utils.file_manip.Matlab_to_array import load_faces, load_vertices
 from utils.mesh import surface_preprocessing as sp
 from utils.mesh import surface_generation as sg
+from utils.mesh.Projection_onto_sphere import get_resampled_inner_surface
 from utils.mesh.visualization import show_comparison
-
-def compute_surface_coefficients(surface_mesh, template_preprocessed, hemisphere, lmax=35, lambda_reg=0, n_jobs=-1):
-    """Compute spherical harmonics coefficients of a surface relative to template"""   
-    surface_coords, surface_tris = surface_mesh
-    
-    preprocessed = sp.preprocess_surface(surface_coords, surface_tris, hemisphere)
-    
-    coeffs = sp.compute_coefficients({
-        'theta': template_preprocessed['theta'],
-        'phi': template_preprocessed['phi'],
-        'center': preprocessed['center'],
-        'orig_coords': preprocessed['orig_coords']
-    }, lmax, lambda_reg, n_jobs)
-    
-    return {
-        'coefficients': coeffs,
-        'preprocessed': preprocessed
-    }
-
-def reconstruct_surface_from_coefficients(coefficients, template_preprocessed, sigma=0, n_jobs=-1):
-    """Generate surface reconstruction from spherical harmonics coefficients"""
-    reconstruction = sg.generate_surface_from_coefficients(
-        template_preprocessed,
-        coefficients, 
-        sigma,
-        n_jobs
-    )
-    
-    return (reconstruction['reconstructed_coords'],
-            reconstruction['error'],
-            reconstruction['error_hausdorff'],
-            template_preprocessed['sphere_tris'])
-
+import utils.mesh.spherical_harmonics as SH
 
 def load_template_data(template_path):
     """Load template data from NPZ file"""
-    template_data = np.load(template_path)
+    data = np.load(template_path)
     return {
-        'theta': template_data['theta'],
-        'phi': template_data['phi'],
-        'sphere_coords': template_data['sphere_coords'],
-        'sphere_tris': template_data['sphere_tris'],
-        'orig_coords': template_data['orig_coords'],
-        'orig_tris': template_data['orig_tris'],
-        'center': template_data['center']  
+        'theta': data['theta'],
+        'phi': data['phi'],
+        'sphere_coords': data['sphere_coords'],
+        'sphere_tris': data['sphere_tris'],
+        'coords': data['coords'],
+        'tris': data['tris'],
+        'center': data['center']
     }
 
-def main_freesurfer():
-    """Main function to run surface reconstruction for both hemispheres"""
-    
-    # 1. Création des templates pour les deux hémisphères
-    print("Creating templates for both hemispheres...")
-    fsaverage6 = fetch_surf_fsaverage(mesh='fsaverage6')
-    
-    # Gauche
-    surf_lh = surface.load_surf_mesh(fsaverage6['pial_left'])
-    surf_lh_mesh = (surf_lh[0], surf_lh[1])
-    template_name_lh = "fsaverage_lh"
-    print("\nGenerating left hemisphere template...")
-    sp.compute_template_projection(surf_lh_mesh, template_name_lh, hemisphere="lh")
-    
-    # Droite
-    surf_rh = surface.load_surf_mesh(fsaverage6['pial_right'])
-    surf_rh_mesh = (surf_rh[0], surf_rh[1])
-    template_name_rh = "fsaverage_rh"
-    print("\nGenerating right hemisphere template...")
-    sp.compute_template_projection(surf_rh_mesh, template_name_rh, hemisphere="rh")
-    
-    # 2. Chargement des templates générés
-    print("\nLoading generated templates...")
-    template_preprocessed_lh = load_template_data('fsaverage_lh_template.npz')
-    template_preprocessed_rh = load_template_data('fsaverage_rh_template.npz')
-    
-    # 3. Chargement des surfaces à traiter
-    print("\nLoading surfaces to process...")
-    fsaverage7 = fetch_surf_fsaverage(mesh='fsaverage7')
-    surf_lh = surface.load_surf_mesh(fsaverage7['pial_left'])
-    surf_rh = surface.load_surf_mesh(fsaverage7['pial_right'])
-    surface_mesh_lh = (surf_lh[0], surf_lh[1])
-    surface_mesh_rh = (surf_rh[0], surf_rh[1])
-    
-    # 4. Traitement hémisphère gauche
-    print("\nProcessing left hemisphere...")
-    coeffs_data_lh = compute_surface_coefficients(
-        surface_mesh_lh,
-        template_preprocessed_lh,
-        "lh",
-        lmax=15,
-        lambda_reg=1e-7
-    )
-    
-    coords_recon_lh, error_lh, error_hausdorff_lh, template_tris_lh = reconstruct_surface_from_coefficients(
-        coeffs_data_lh['coefficients'],
-        template_preprocessed_lh,
-        sigma=1e-5
-    )
-    
-    # 5. Traitement hémisphère droit
-    print("\nProcessing right hemisphere...")
-    coeffs_data_rh = compute_surface_coefficients(
-        surface_mesh_rh,
-        template_preprocessed_rh,
-        "rh",
-        lmax=15,
-        lambda_reg=1e-7
-    )
-    
-    coords_recon_rh, error_rh, error_hausdorff_rh, template_tris_rh = reconstruct_surface_from_coefficients(
-        coeffs_data_rh['coefficients'],
-        template_preprocessed_rh,
-        sigma=1e-5
-    )
-    
-    # 6. Affichage des métriques
-    print("\nResults for left hemisphere:")
-    print(f"Hausdorff Error: {error_hausdorff_lh:.4f}")
-    print(f"Mean Error: {np.mean(error_lh):.4f}")
-    print(f"Max Error: {np.max(error_lh):.4f}")
+# Template generation
+fsaverage6 = fetch_surf_fsaverage(mesh='fsaverage6')
 
-    print("\nResults for right hemisphere:")
-    print(f"Hausdorff Error: {error_hausdorff_rh:.4f}")
-    print(f"Mean Error: {np.mean(error_rh):.4f}")
-    print(f"Max Error: {np.max(error_rh):.4f}")
-    
-    # 7. Visualisation
-    print("\nVisualizing results...")
-    show_comparison(
-        orig_coords=coeffs_data_lh['preprocessed']['orig_coords'],
-        recon_coords=coords_recon_lh,
-        triangles=template_tris_lh,
-        error=error_lh,
-    )
+# Compute Y matrices for both hemispheres once
+lmax = 30
+# Generate templates if needed
+# for hemi, surf_file in [('lh', fsaverage6['pial_left']), ('rh', fsaverage6['pial_right'])]:
+#     print(f"\nGenerating {hemi} template...")
+#     surf = surface.load_surf_mesh(surf_file)
+#     sp.compute_template_projection(surf[0], surf[1], "src/preprocessing/fsaverage", hemi)
 
-    show_comparison(
-        orig_coords=coeffs_data_rh['preprocessed']['orig_coords'],
-        recon_coords=coords_recon_rh,
-        triangles=template_tris_rh,
-        error=error_rh,
+# Load template projections
+template_projection_lh = load_template_data('src/preprocessing/fsaverage_lh_template.npz')
+template_projection_rh = load_template_data('src/preprocessing/fsaverage_rh_template.npz')
+
+
+# Compute Y matrices
+Y_lh = SH.compute_Y(
+    template_projection_lh['theta'],
+    template_projection_lh['phi'],
+    lmax,
+)
+
+Y_rh = SH.compute_Y(
+    template_projection_rh['theta'],
+    template_projection_rh['phi'],
+    lmax,
+)
+
+
+def compute_surface_coefficients(surface_mesh, hemisphere, lmax, lambda_reg=0):
+    """Compute spherical harmonics coefficients of a surface relative to template"""
+    surface_coords, surface_tris = surface_mesh
+    
+    # Select appropriate template and Y matrix
+    if hemisphere == "lh":
+        Y = Y_lh
+        template_projection = template_projection_lh
+    else:
+        Y = Y_rh
+        template_projection = template_projection_rh
+
+    # Get resampled surface
+    resampled_surface = get_resampled_inner_surface((surface_coords, surface_tris), hemisphere)
+    
+    # Compute coefficients using template sphere coordinates
+    coeffs = sp.compute_coefficients(
+        Y,
+        template_projection['sphere_coords'],  # Utiliser les coordonnées de la sphère template
+        resampled_surface,
+        lmax, 
+        lambda_reg,
     )
     
     return {
-        'left': {
-            'coeffs_data': coeffs_data_lh,
-            'reconstruction': coords_recon_lh,
-            'error': error_lh,
-            'hausdorff': error_hausdorff_lh
-        },
-        'right': {
-            'coeffs_data': coeffs_data_rh,
-            'reconstruction': coords_recon_rh,
-            'error': error_rh,
-            'hausdorff': error_hausdorff_rh
-        }
+        'organized_coeffs': coeffs['organized_coeffs'],
+        'lmax': lmax,
+        'resampled_surface': resampled_surface,
+        'template_center': np.mean(template_projection['sphere_coords'], axis=0)  
     }
 
+def reconstruct_surface_from_coefficients(coefficients_data, hemisphere, sigma=0):
+    """Generate surface reconstruction from spherical harmonics coefficients"""
+    # Select appropriate template
+    template_data = template_projection_lh if hemisphere == 'lh' else template_projection_rh
+    Y=Y_lh if hemisphere=="lh" else Y_rh
 
+    reconstruction_coords=SH.generate_surface(Y, coefficients_data['lmax'], sigma, coefficients_data['organized_coeffs'],)
 
-def main_matlab():
-    from utils.file_manip.Matlab_to_array import load_faces, load_vertices
-    import pyvista as pv
+    # Recentrer la reconstruction
+    if 'template_center' in coefficients_data:
+        reconstruction_coords += coefficients_data['template_center']
     
-    def extract_hemisphere(mesh, hemisphere):
-        """
-        Extract left or right hemisphere from a brain mesh.
-        Y positif = gauche
-        Y négatif = droit
-        """
-        points = mesh.points
-        
-        if hemisphere == 'left':
-            indices = points[:, 1] >= 0  # positive y for left
-        else:
-            indices = points[:, 1] < 0   # negative y for right
-            
-        points = points[indices]
-        old_to_new = np.cumsum(indices) - 1
-        faces = mesh.faces.reshape(-1, 4)
-        valid_faces = []
-        
-        for face in faces[:, 1:]:
-            if all(indices[face]):
-                new_face = old_to_new[face]
-                valid_faces.append([3] + list(new_face))
-                
-        valid_faces = np.array(valid_faces).flatten()
-        return pv.PolyData(points, valid_faces)
+    # Get reference coordinates and template triangulation
+    target_coords, _ = coefficients_data['resampled_surface']
+    template_tris = template_data['sphere_tris']
     
-    template_preprocessed = load_template_data('fsaverage_template.npz')
-
-    faces = load_faces(r"C:\Users\wbou2\Desktop\meg_to_surface_ml\src\data\Faces_1.mat")
-    vertices = load_vertices(r"C:\Users\wbou2\Desktop\meg_to_surface_ml\src\data\Vertices_1.mat")
-    pv_mesh_full = pv.PolyData(vertices, np.column_stack((np.full(len(faces), 3), faces)))
-    hemisphere_mesh=extract_hemisphere(pv_mesh_full)
-
-    vertices = hemisphere_mesh.points
-    faces = hemisphere_mesh.faces.reshape(-1, 4)[:, 1:]
-    surface_mesh = (vertices, faces)
-
-    # Compute reconstruction
+    # Compute metrics
+    metrics =sg.compute_surface_metrics(
+        reconstruction_coords,
+        target_coords,
+        template_tris
+    )
+    
+    return {
+        'reconstructed_coords': reconstruction_coords,
+        'triangles': template_tris,
+        'metrics': metrics
+    }
+def process_hemisphere(surface_mesh, hemisphere, lmax, lambda_reg=1e-7, sigma=1e-5):
+    """Process single hemisphere"""
+    print(f"\nProcessing {hemisphere} hemisphere...")
+    
+    # Compute coefficients
     coeffs_data = compute_surface_coefficients(
         surface_mesh,
-        template_preprocessed,
-        lmax=15,
-        lambda_reg=1e-7
+        hemisphere,
+        lmax=lmax,
+        lambda_reg=lambda_reg
     )
     
-    coords_recon, error, error_hausdorff, template_tris = reconstruct_surface_from_coefficients(
-        coeffs_data['coefficients'],
-        template_preprocessed,
-        sigma=1e-5
+    # Reconstruct surface
+    reconstruction = reconstruct_surface_from_coefficients(
+        coeffs_data,
+        hemisphere,
+        sigma=sigma
+    )
+
+    # Visualization
+    target_coords, target_tris = coeffs_data['resampled_surface']
+    show_comparison(
+        target_coords,
+        reconstruction['reconstructed_coords'],
+        target_tris,
+        reconstruction['metrics'],  # Pass the metrics correctly
+        f"{hemisphere} Hemisphere Reconstruction"
+    )
+    
+    return {
+        'coeffs_data': coeffs_data,
+        'reconstruction': reconstruction['reconstructed_coords'],
+        'metrics': reconstruction['metrics']
+    }
+
+
+def main_freesurfer():
+    """Process FreeSurfer surface with comprehensive metrics and visualization"""
+    print("\n=== Starting Surface Reconstruction ===")
+    
+    # Load surface
+    fsaverage7 = fetch_surf_fsaverage(mesh='fsaverage7')
+    surf = surface.load_surf_mesh(fsaverage7['pial_left'])
+    print(f"Original surface: {surf[0].shape} vertices")
+    
+
+    # Process left hemisphere with increased parameters
+    result = process_hemisphere(
+        (surf[0], surf[1]),
+        'lh',
+        lmax=30,
+        lambda_reg=1e-6,
+        sigma=1e-4
     )
     
     # Print metrics
-    print(f"Hausdorff Error: {error_hausdorff:.4f}")
-    print(f"Mean Error: {np.mean(error):.4f}")
-    print(f"Max Error: {np.max(error):.4f}")
+    metrics = result['metrics']
+    print("\n=== Reconstruction Metrics ===")
+    print(f"Mean Error: {metrics['distance_stats']['mean_error']:.4f} mm")
+    print(f"Max Error: {metrics['distance_stats']['max_error']:.4f} mm")
+    print(f"Hausdorff Error: {metrics['distance_stats']['error_hausdorff']:.4f} mm")
+    print(f"Mean Curvature Difference: {metrics['shape_stats']['mean_curvature_diff']:.4f}")
+    print(f"Total Area Difference: {metrics['area_stats']['total_area_diff']:.4f} mm²")
     
-    # Visualize results - sans window_size
-    show_comparison(
-        orig_coords=coeffs_data['preprocessed']['orig_coords'],
-        recon_coords=coords_recon,
-        triangles=template_tris,
-        error=error
-    )
-        
+    return result
+
 if __name__ == "__main__":
-    main_freesurfer()
+    results = main_freesurfer()
+
