@@ -2,181 +2,244 @@ import numpy as np
 from nilearn.datasets import fetch_surf_fsaverage
 from nilearn import surface
 import pyvista as pv
+import pickle
 from utils.file_manip.Matlab_to_array import load_faces, load_vertices
-from utils.mesh import surface_preprocessing as sp
-from utils.mesh import surface_generation as sg
-from utils.mesh.Projection_onto_sphere import get_resampled_inner_surface
+from utils.file_manip.vtk_processing import vtk_mesh_to_array
+from utils.mathutils import compute_surface_metrics
+from utils.mesh import spherical_harmonics as SH 
+from utils.mesh.surface_preprocess import get_resampled_inner_surface
 from utils.mesh.visualization import show_comparison
 import utils.mesh.spherical_harmonics as SH
 
+
 def load_template_data(template_path):
-    """Load template data from NPZ file"""
-    data = np.load(template_path)
-    return {
-        'theta': data['theta'],
-        'phi': data['phi'],
-        'sphere_coords': data['sphere_coords'],
-        'sphere_tris': data['sphere_tris'],
-        'coords': data['coords'],
-        'tris': data['tris'],
-        'center': data['center']
-    }
+   """Load template data from NPZ file"""
+   data = np.load(template_path)
+   return {
+       'theta': data['theta'],
+       'phi': data['phi'],
+       'sphere_coords': data['sphere_coords'],
+       'sphere_tris': data['sphere_tris'],
+       'coords': data['coords'],
+       'tris': data['tris'],
+       'center': data['center']
+   }
+#Paramaters
 
-# Template generation
-fsaverage6 = fetch_surf_fsaverage(mesh='fsaverage6')
+sigma=0
+lambda_reg=1e-5 
 
-# Compute Y matrices for both hemispheres once
-lmax = 30
-# Generate templates if needed
-# for hemi, surf_file in [('lh', fsaverage6['pial_left']), ('rh', fsaverage6['pial_right'])]:
-#     print(f"\nGenerating {hemi} template...")
-#     surf = surface.load_surf_mesh(surf_file)
-#     sp.compute_template_projection(surf[0], surf[1], "src/preprocessing/fsaverage", hemi)
+# Initialize templates and Y matrices
+lmax = 15
 
-# Load template projections
-template_projection_lh = load_template_data('src/preprocessing/fsaverage_lh_template.npz')
-template_projection_rh = load_template_data('src/preprocessing/fsaverage_rh_template.npz')
+template_projection = pickle.load(open(r"C:\Users\wbou2\Desktop\meg_to_surface_ml\src\data\spherical_template.pkl", 'rb'))
+Y=np.load(r"C:\Users\wbou2\Desktop\meg_to_surface_ml\src\data\Y_120.npz")['Y']
+Y_lh=Y[:,:(lmax+1)**2]
 
 
-# Compute Y matrices
-Y_lh = SH.compute_Y(
-    template_projection_lh['theta'],
-    template_projection_lh['phi'],
-    lmax,
-)
-
-Y_rh = SH.compute_Y(
-    template_projection_rh['theta'],
-    template_projection_rh['phi'],
-    lmax,
-)
-
-
-def compute_surface_coefficients(surface_mesh, hemisphere, lmax, lambda_reg=0):
-    """Compute spherical harmonics coefficients of a surface relative to template"""
-    surface_coords, surface_tris = surface_mesh
-    
-    # Select appropriate template and Y matrix
-    if hemisphere == "lh":
-        Y = Y_lh
-        template_projection = template_projection_lh
-    else:
-        Y = Y_rh
-        template_projection = template_projection_rh
-
-    # Get resampled surface
-    resampled_surface = get_resampled_inner_surface((surface_coords, surface_tris), hemisphere)
-    
-    # Compute coefficients using template sphere coordinates
-    coeffs = sp.compute_coefficients(
-        Y,
-        template_projection['sphere_coords'],  # Utiliser les coordonnées de la sphère template
-        resampled_surface,
-        lmax, 
-        lambda_reg,
-    )
-    
-    return {
-        'organized_coeffs': coeffs['organized_coeffs'],
-        'lmax': lmax,
-        'resampled_surface': resampled_surface,
-        'template_center': np.mean(template_projection['sphere_coords'], axis=0)  
-    }
-
-def reconstruct_surface_from_coefficients(coefficients_data, hemisphere, sigma=0):
-    """Generate surface reconstruction from spherical harmonics coefficients"""
-    # Select appropriate template
-    template_data = template_projection_lh if hemisphere == 'lh' else template_projection_rh
-    Y=Y_lh if hemisphere=="lh" else Y_rh
-
-    reconstruction_coords=SH.generate_surface(Y, coefficients_data['lmax'], sigma, coefficients_data['organized_coeffs'],)
-
-    # Recentrer la reconstruction
-    if 'template_center' in coefficients_data:
-        reconstruction_coords += coefficients_data['template_center']
-    
-    # Get reference coordinates and template triangulation
-    target_coords, _ = coefficients_data['resampled_surface']
-    template_tris = template_data['sphere_tris']
-    
-    # Compute metrics
-    metrics =sg.compute_surface_metrics(
-        reconstruction_coords,
-        target_coords,
-        template_tris
-    )
-    
-    return {
-        'reconstructed_coords': reconstruction_coords,
-        'triangles': template_tris,
-        'metrics': metrics
-    }
-def process_hemisphere(surface_mesh, hemisphere, lmax, lambda_reg=1e-7, sigma=1e-5):
-    """Process single hemisphere"""
-    print(f"\nProcessing {hemisphere} hemisphere...")
-    
-    # Compute coefficients
-    coeffs_data = compute_surface_coefficients(
-        surface_mesh,
-        hemisphere,
-        lmax=lmax,
-        lambda_reg=lambda_reg
-    )
-    
-    # Reconstruct surface
-    reconstruction = reconstruct_surface_from_coefficients(
-        coeffs_data,
-        hemisphere,
-        sigma=sigma
-    )
-
-    # Visualization
-    target_coords, target_tris = coeffs_data['resampled_surface']
-    show_comparison(
-        target_coords,
-        reconstruction['reconstructed_coords'],
-        target_tris,
-        reconstruction['metrics'],  # Pass the metrics correctly
-        f"{hemisphere} Hemisphere Reconstruction"
-    )
-    
-    return {
-        'coeffs_data': coeffs_data,
-        'reconstruction': reconstruction['reconstructed_coords'],
-        'metrics': reconstruction['metrics']
-    }
-
-
+#Surface reconstructions
 def main_freesurfer():
-    """Process FreeSurfer surface with comprehensive metrics and visualization"""
     print("\n=== Starting Surface Reconstruction ===")
-    
-    # Load surface
-    fsaverage7 = fetch_surf_fsaverage(mesh='fsaverage7')
-    surf = surface.load_surf_mesh(fsaverage7['pial_left'])
-    print(f"Original surface: {surf[0].shape} vertices")
-    
 
-    # Process left hemisphere with increased parameters
-    result = process_hemisphere(
-        (surf[0], surf[1]),
-        'lh',
-        lmax=30,
-        lambda_reg=1e-6,
-        sigma=1e-4
-    )
-    
-    # Print metrics
-    metrics = result['metrics']
+    # Load surface
+    fsaverage6 = fetch_surf_fsaverage(mesh='fsaverage6')
+    orig_vertices, orig_triangles = surface.load_surf_mesh(fsaverage6['pial_left'])
+
+    # Load resampled surface from NPZ
+    # resampled_data = np.load('output/resampled_surface.npz')
+    resampled_surface = (orig_vertices, orig_triangles)
+
+    # 2. Compute spherical harmonics coefficients
+    coeffs = SH.compute_coefficients(Y_lh, template_projection['sphere_coords'], 
+                                    resampled_surface, lmax, lambda_reg)
+
+    # 3. Reconstruct surface from coefficients
+    reconstruction_coords = SH.generate_surface(Y_lh, lmax, sigma, orders=coeffs['organized_coeffs'])
+
+    # 4. Compute quality metrics
+    metrics = compute_surface_metrics(reconstruction_coords, resampled_surface[0], 
+                                        template_projection['sphere_tris'])
+
+    # 5. Visualize results
+    show_comparison(resampled_surface[0], reconstruction_coords, 
+                    template_projection['sphere_tris'], metrics)
+
     print("\n=== Reconstruction Metrics ===")
     print(f"Mean Error: {metrics['distance_stats']['mean_error']:.4f} mm")
     print(f"Max Error: {metrics['distance_stats']['max_error']:.4f} mm")
     print(f"Hausdorff Error: {metrics['distance_stats']['error_hausdorff']:.4f} mm")
     print(f"Mean Curvature Difference: {metrics['shape_stats']['mean_curvature_diff']:.4f}")
     print(f"Total Area Difference: {metrics['area_stats']['total_area_diff']:.4f} mm²")
+
+    return {
+        'resampled_surface': resampled_surface,
+        'reconstruction': reconstruction_coords,
+        'metrics': metrics,
+        'coefficients': coeffs
+    }
+
+def convert_to_poly(triangles):
+    tris=np.column_stack((np.full(len(triangles),3),triangles))
+    return tris 
+
+def main_matlab():
+    left_faces_file =r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN\sub-CC712027\lh_faces.mat"
+    left_vertices_file =r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN\sub-CC712027\lh_vertices.mat"
+
+    # Load and center original surface
+    left_faces = load_faces(left_faces_file)
+    left_vertices = load_vertices(left_vertices_file)
+    left_vertices = left_vertices - left_vertices.mean(axis=0)
+
+    print("\n=== Starting Surface Reconstruction ===")
+
+    # Load and center resampled surface
+    resampled_surface = np.load(r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN\sub-CC712027\lh_resampled.npz")
+    r_coords, r_tris = resampled_surface["coords"], resampled_surface["tris"]
+    r_coords = r_coords-r_coords.mean(axis=0)
+    resampled_surface = (r_coords, r_tris)
+
+    # 2. Compute spherical harmonics coefficients
+    coeffs = SH.compute_coefficients(Y_lh, template_projection['sphere_coords'], 
+                                    resampled_surface, lmax, lambda_reg)
+
+    # 3. Reconstruct surface (starting from l=1)
+    reconstruction_coords = SH.generate_surface(Y_lh, lmax, sigma, orders=coeffs['organized_coeffs'])
+    print(np.mean(reconstruction_coords, axis=0))
+
+    print(left_vertices.shape, r_coords.shape, reconstruction_coords.shape)
     
-    return result
+    tris1 = convert_to_poly(left_faces)
+    tris2 = convert_to_poly(r_tris)
+    tris3 = tris2
 
+    p = pv.Plotter(shape=(1,3))
+
+    p.subplot(0,0)
+    mesh1 = pv.PolyData(left_vertices, tris1)
+    p.add_mesh(mesh1, show_edges=True, color="blue")
+    p.add_text("Original (centered)", position='upper_edge')
+
+    p.subplot(0,1)
+    mesh2 = pv.PolyData(r_coords, tris2)
+    p.add_mesh(mesh2, show_edges=True, color="green")
+    p.add_text("Resampled (centered)", position='upper_edge')
+
+    p.subplot(0,2)
+    mesh3 = pv.PolyData(reconstruction_coords, tris3)
+    p.add_mesh(mesh3, show_edges=True, color="red")
+    p.add_text("Reconstructed", position='upper_edge')
+
+    p.link_views()
+    p.show()
+
+
+    # 4. Compute quality metrics
+    metrics =compute_surface_metrics(reconstruction_coords, resampled_surface[0], 
+                                        template_projection['sphere_tris'])
+
+    # 5. Visualize results
+    show_comparison(resampled_surface[0], reconstruction_coords, 
+                    template_projection['sphere_tris'], metrics)
+
+    print("\n=== Reconstruction Metrics ===")
+    print(f"Mean Error: {metrics['distance_stats']['mean_error']:.4f} mm")
+    print(f"Max Error: {metrics['distance_stats']['max_error']:.4f} mm")
+    print(f"Hausdorff Error: {metrics['distance_stats']['error_hausdorff']:.4f} mm")
+    print(f"Mean Curvature Difference: {metrics['shape_stats']['mean_curvature_diff']:.4f}")
+    print(f"Total Area Difference: {metrics['area_stats']['total_area_diff']:.4f} mm²")
+
+    return {
+        'resampled_surface': resampled_surface,
+        'reconstruction': reconstruction_coords,
+        'metrics': metrics,
+        'coefficients': coeffs
+    }
+
+
+def main_matlab_test():
+    left_faces = r"C:\Users\wbou2\Desktop\meg_to_surface_ml\src\data\lh_faces.mat"
+    left_vertices = r"C:\Users\wbou2\Desktop\meg_to_surface_ml\src\data\lh_vertices.mat"
+
+    left_faces1 = load_faces(left_faces)
+    left_vertices1 = load_vertices(left_vertices)
+
+    left_faces_file = r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN\sub-CC710679\lh_faces.mat"
+    left_vertices_file = r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN\sub-CC710679\lh_vertices.mat"
+
+    left_faces = load_faces(left_faces_file)
+    left_vertices = load_vertices(left_vertices_file)
+
+    # Visualisation des surfaces originales
+
+    p1 = pv.Plotter(shape=(1,2))
+    
+    # Surface de référence originale
+    p1.subplot(0,0)
+    tris1_orig = np.column_stack((np.full(len(left_faces1), 3), left_faces1))
+    mesh1_orig = pv.PolyData(left_vertices1, tris1_orig)
+    p1.add_mesh(mesh1_orig, color='lightgray', show_edges=False)
+
+    # Surface avec erreur originale
+    p1.subplot(0,1)
+    tris_orig = np.column_stack((np.full(len(left_faces), 3), left_faces))
+    mesh_orig = pv.PolyData(left_vertices, tris_orig)
+    p1.add_mesh(mesh_orig,
+                show_edges=False,
+                )
+    p1.link_views()
+    p1.show()
+
+    # Visualisation des surfaces après resampling
+    r1_coords, r1_tris = get_resampled_inner_surface((left_vertices1, left_faces1),'lh')
+    r_coords, r_tris = get_resampled_inner_surface((left_vertices, left_faces),'lh')
+
+    error = np.sqrt(np.sum((r_coords-r1_coords)**2, axis=1))
+
+    p2 = pv.Plotter(shape=(1,2))
+    
+    # Surface de référence resample
+    p2.subplot(0,0)
+    tris1 = np.column_stack((np.full(len(r1_tris), 3), r1_tris))
+    mesh1 = pv.PolyData(r1_coords, tris1)
+    p2.add_mesh(mesh1, color='lightgray', show_edges=False)
+    
+    # Surface avec erreur resample
+    p2.subplot(0,1)
+    tris = np.column_stack((np.full(len(r_tris), 3), r_tris))
+    mesh = pv.PolyData(r_coords, tris)
+    mesh.point_data['error'] = error
+    p2.add_mesh(mesh, 
+              scalars='error',
+              cmap='jet',  
+              show_edges=False,
+              scalar_bar_args={'title': 'Resampled Error (mm)'}
+    )
+    
+    p2.link_views()  
+    p2.show()
+
+
+def main_matlab_test2():
+    resampled721532=np.load(r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN\sub-CC721532\lh_resampled.npz")
+    resampled720358=np.load(r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN\sub-CC720358\lh_resampled.npz")
+    coords_721532,tris_721532=resampled721532["coords"], resampled721532["tris"]
+    coords_720358,tris_720358=resampled720358["coords"], resampled720358["tris"]
+    print(tris_720358==tris_721532)
+    # mesh1=pv.PolyData(coords_721532, convert_to_poly(tris_721532))
+    # mesh2=pv.PolyData(coords_720358, convert_to_poly(tris_720358))
+    # p=pv.Plotter(shape=(1,2))
+
+    # p.subplot(0,0)
+    # p.add_mesh(mesh1, show_edges=True)
+
+    # p.subplot(0,1)
+    # p.add_mesh(mesh2,show_edges=True)
+
+    # p.link_views()
+    # p.show()
+    
+
+   
 if __name__ == "__main__":
-    results = main_freesurfer()
-
+    results = main_matlab()

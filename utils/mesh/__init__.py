@@ -1,32 +1,22 @@
 # utils/mesh/__init__.py
 
-from .Projection_onto_sphere import (
+from .surface_preprocess import (
    get_spherical_projection,
    get_resampled_inner_surface
-)
-
-from .surface_generation import (
-   generate_surface_from_coefficients,
-   compute_surface_metrics  # Ajout de compute_surface_metrics
-)
-
-from .surface_preprocessing import (
-   get_spherical_params,
-   compute_template_projection,
-   compute_coefficients
 )
 
 from .spherical_harmonics import (
    compute_Y,
    organize_coeffs,
-   generate_surface_partial,
-   generate_surface
+   generate_surface,
+   get_spherical_params,
+   compute_coefficients
 )
 
 from .visualization import (
    show_comparison,
    show_surface,
-   show_spherical_projection  # Ajout de show_spherical_projection
+   show_spherical_projection  
 )
 
 __all__ = [
@@ -35,23 +25,16 @@ __all__ = [
    'organize_coeffs',
    'generate_surface_partial',
    'generate_surface',
-
-   # Surface generation
-   'generate_surface_from_coefficients',
-   'compute_surface_metrics',  # Ajout
-
-   # Surface preprocessing
    'get_spherical_params',
-   'compute_template_projection',
    'compute_coefficients',
 
-   # Projection onto sphere 
+   # Surface preprocess 
    'get_spherical_projection',
    'get_resampled_inner_surface',
 
    # Visualization
    'show_comparison',
    'show_surface',
-   'show_spherical_projection'  # Ajout
+   'show_spherical_projection'
 ]
 

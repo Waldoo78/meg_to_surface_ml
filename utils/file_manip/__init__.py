@@ -6,7 +6,7 @@ from .vtk_processing import (
 
 from .Matlab_to_array import (
     load_faces,
-    load_vertices
+    load_vertices,
 )
 
 __all__ = [

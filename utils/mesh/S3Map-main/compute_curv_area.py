@@ -24,7 +24,7 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--input', '-i', default=None, required=True, 
                         help="the input inner surface in vtk format, containing vertices and faces")
-    parser.add_argument('--avg_iter', '-a', default=6,
+    parser.add_argument('--avg_iter', '-a', default=12,
                         help="the iteration number for averaging/smoothing the mean curvature feature")
     
     try:
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     # compute curvature
     print('\nComputing mean curvature...')
     t1 = time.time()
-    surf.curv = sprop.computeMeanCurvature(surf, dist=0.15)
+    surf.curv = sprop.computeMeanCurvature(surf, dist=0.35)
     # surf.normalizeCurvature()
     surf.averageCurvature(avg_iter)
     print('Saving mean curvature to original input inner surface as a scalar property field.')

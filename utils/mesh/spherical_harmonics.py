@@ -1,15 +1,24 @@
 import numpy as np
 from scipy.special import sph_harm
+from utils.mathutils import cart_to_sph
 
-def compute_Y(theta, phi, lmax, n_jobs=None):
-    """Computes the spherical harmonics basis matrix"""
-    N = (lmax + 1)**2
-    Y = np.zeros((theta.shape[0], N), dtype=np.complex128)
+def compute_Y(theta, phi, lmax):
+    N = len(theta)
+    M = (lmax + 1)**2
+    Y = np.zeros((N, M), dtype=complex)
+ 
     idx = 0
     for l in range(lmax + 1):
-        for m in range(-l, l + 1):
-            Y[:, idx] = sph_harm(m, l, theta, phi)
-            idx += 1
+        for m in range(0, l + 1):
+            ylm = sph_harm(m, l, theta, phi)[:, np.newaxis]
+            if m == 0:
+                Y[:, idx] = ylm.flatten()
+                idx += 1
+            else:
+                Y[:, idx] = ylm.flatten()
+                idx += 1
+                Y[:, idx] = (-1)**m * np.conjugate(ylm.flatten())
+                idx += 1           
     return Y
 
 def organize_coeffs(coeffs, lmax):
@@ -21,31 +30,36 @@ def organize_coeffs(coeffs, lmax):
         start_idx += size
     return orders
 
-def generate_surface_partial(Y, l, sigma, ordres):
-    """Generates surface coordinates for a single degree l, with Y the matrix of spherical harmonics"""
+def generate_surface(Y, lmax, sigma, orders):
     N_points = Y.shape[0]
-    xyz = np.zeros((N_points, 3), dtype=np.complex128)
-    scale = np.exp(-l * (l + 1) * sigma)
+    xyz_total = np.zeros((N_points, 3), dtype=np.complex128)
+    scales = np.array([np.exp(-l * (l + 1) * sigma) for l in range(1, lmax + 1)])
+    for l in range(1, lmax + 1):
+        start_idx = l * l
+        size = 2 * l + 1
+        Y_block = Y[:, start_idx:start_idx + size]
+        xyz_total += scales[l-1] * (Y_block @ orders[l])
     
-    start_idx = l * l  # Index de départ pour le degré l
-    for m_idx, m in enumerate(range(-l, l + 1)):
-        Ylm = Y[:, start_idx + m_idx]  # On ajoute m_idx à l'index de départ
-        xyz += scale * ordres[l][m_idx, :] * Ylm.reshape(-1, 1)
-    
-    return xyz
+    return np.real(xyz_total)
 
-def generate_surface(Y,lmax, sigma, orders):
-    """Generates surface coordinates from spherical harmonics coefficients.
+def get_spherical_params(sphere_coords,sphere_tris):
+    center = np.mean(sphere_coords, axis=0)
+    _, theta, phi = cart_to_sph(sphere_coords - center)
+
+    return {
+        'theta': theta, 'phi': phi,
+        'coords': sphere_coords, 'tris': sphere_tris,
+    }
+
+def compute_coefficients(Y, template_projection, resampled_surface, lmax, lambda_reg=0):
+    """Computes spherical harmonics coefficients with the grid imposed by the template"""
+    target_coords, target_tris = resampled_surface
+    template_center = np.mean(template_projection, axis=0)
     
-    Args:
-        phi (ndarray): Polar angle in radians [0, π]
-        theta (ndarray): Azimuthal angle in radians [0, 2π]
-        lmax (int): Maximum degree
-        sigma (float): Smoothing parameter
-        orders (dict): Coefficients dictionary by degree
-        
-    Returns:
-        ndarray: Real surface coordinates (N_points, 3)
-    """
-    return np.real(sum(generate_surface_partial(Y,l, sigma, orders) 
-                      for l in range(lmax + 1)))
+    coeffs = np.linalg.lstsq(Y, target_coords - template_center, rcond=lambda_reg)[0]
+    
+    return {
+        'organized_coeffs': organize_coeffs(coeffs, lmax),
+        'lmax': lmax,
+        'template_center': template_center  
+    }

@@ -5,7 +5,6 @@ from vtk import vtkPoints, vtkCellArray, vtkTriangle, vtkPolyData, vtkPolyDataWr
 
 def vtk_mesh_to_array(vtk_file):
     
-    # Charger les maillages VTK
     mesh = pv.read(vtk_file)
     points=np.array(mesh.points)
     
@@ -14,12 +13,7 @@ def vtk_mesh_to_array(vtk_file):
     return points, faces
 
 def save_to_vtk(coords,triangles, output_file):
-       """
-       Save surface as VTK format
        
-       Args:
-           output_file (str): Path to VTK file to create
-       """
        # Create VTK points
        points = vtkPoints()
        for coord in coords:

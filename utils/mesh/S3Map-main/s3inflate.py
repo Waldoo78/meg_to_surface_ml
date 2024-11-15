@@ -28,8 +28,8 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--input', '-i', default=None, required=True, 
                         help="the input inner surface in vtk format, containing vertices and faces")
-    parser.add_argument('--num_iter', default=600, help='The number of inflations.')
-    parser.add_argument('--lambda_s','-lambda_s', default=1.0, help='weight for spring term, 1-lambda_s for preserving metrics (J_d term), ' +\
+    parser.add_argument('--num_iter', default=850, help='The number of inflations.')
+    parser.add_argument('--lambda_s','-lambda_s', default=0.6, help='weight for spring term, 1-lambda_s for preserving metrics (J_d term), ' +\
                         'default=1.0 since we will mimimize J_d on sphere later more conveniently and faster.')
     parser.add_argument('--output', '-o', default=None, help="the output inflated surface filename, if not given, it will be input.inflated.vtk")
     parser.add_argument('--save_sulc', default=True, help="save sulc or not, if not, inflation will be much faster")
@@ -64,10 +64,10 @@ if __name__ == "__main__":
     inflation_params = {'max_iter_num': int(num_iter),
                         'lambda': float(lambda_s),
                         'save_sulc': save_sulc,
-                        'n_averages': 4,
-                        'max_grad': 1.0,
-                        'min_neg_area_num': 50,
-                        'min_proj_iter': 200}
+                        'n_averages': 9,
+                        'max_grad': 0.55,
+                        'min_neg_area_num': 170,
+                        'min_proj_iter': 300}
     InflateSurface(surf, inflation_params)
     print('Saving sulc to input inner surface', input_name)
     inner_surf_vtk['sulc'] = surf.sulc
