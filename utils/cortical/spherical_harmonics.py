@@ -34,14 +34,17 @@ def generate_surface(Y, lmax, sigma, orders):
     N_points = Y.shape[0]
     xyz_total = np.zeros((N_points, 3), dtype=np.complex128)
     scales = np.array([np.exp(-l * (l + 1) * sigma) for l in range(1, lmax + 1)])
+    
     for l in range(1, lmax + 1):
         start_idx = l * l
         size = 2 * l + 1
         Y_block = Y[:, start_idx:start_idx + size]
         xyz_total += scales[l-1] * (Y_block @ orders[l])
     
-    return np.real(xyz_total)
-
+    xyz_real = np.real(xyz_total)
+    xyz_real = xyz_real - np.mean(xyz_real, axis=0)
+    
+    return xyz_real
 def get_spherical_params(sphere_coords,sphere_tris):
     center = np.mean(sphere_coords, axis=0)
     _, theta, phi = cart_to_sph(sphere_coords - center)

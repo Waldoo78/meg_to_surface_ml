@@ -1,4 +1,4 @@
-# utils/mesh/__init__.py
+# utils/cortical/__init__.py
 
 from .surface_preprocess import (
    get_spherical_projection,

@@ -49,43 +49,6 @@ def sph_to_cart(r, theta, phi):
     
     return np.column_stack((x, y, z))
 
-def solve_coefficients_svd(Y, coords, lambda_reg):
-    """Resolves the linear system to find the coefficients
-    
-    Args:
-        Y (ndarray): Spherical harmonics matrix (N_points, N_coeffs)
-        coords (ndarray): Coordinates or differences to fit. Shape can be:
-            - (N_points, 2) for angular deformations (θ, φ)
-            - (N_points, 1) for radial deformations (r)
-            - (N_points, 3) for full 3D coordinates
-        lambda_reg (float): Regularization parameter
-        
-    Returns:
-        ndarray: Coefficients matrix (N_coeffs, n_dims)
-            where n_dims matches the second dimension of coords
-    """
-    if lambda_reg < 0:
-        raise ValueError("lambda_reg must be non-negative")
-    
-    # Handle different input dimensions
-    coords = np.atleast_2d(coords)
-    if coords.shape[1] not in [1, 2, 3]:
-        raise ValueError("coords must have 1, 2 or 3 components (radial, angular, or full 3D)")
-    
-    N_coeffs = Y.shape[1]
-    n_dims = coords.shape[1]
-    coeffs = np.zeros((N_coeffs, n_dims), dtype=np.complex128)
-    
-    # Construct regularized system
-    A = np.vstack([Y, np.sqrt(lambda_reg) * np.eye(N_coeffs)])
-    
-    # Solve for each coordinate
-    for i in range(n_dims):
-        b = np.concatenate([coords[:, i], np.zeros(N_coeffs)])
-        coeffs[:, i] = np.linalg.lstsq(A, b, rcond=None)[0]
-    
-    return coeffs
-
 def hausdorff_distance(array1, array2):
     """Compute the Hausdorff distance between two 3D point clouds.
     
