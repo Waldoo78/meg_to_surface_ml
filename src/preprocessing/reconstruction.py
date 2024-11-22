@@ -3,6 +3,7 @@ from nilearn.datasets import fetch_surf_fsaverage
 from nilearn import surface
 import pyvista as pv
 import pickle
+import os 
 from utils.file_manip.Matlab_to_array import load_faces, load_vertices
 from utils.mathutils import compute_surface_metrics
 from utils.cortical import spherical_harmonics as SH 
@@ -23,12 +24,17 @@ def load_template_data(template_path):
        'center': data['center']
    }
 
-#Paramaters
+#Parameters
 sigma=0
 lambda_reg=1e-9
-lmax = 42
+lmax = 2
+
 
 template_projection = pickle.load(open(r"C:\Users\wbou2\Desktop\meg_to_surface_ml\src\data\spherical_template.pkl", 'rb'))
+pre_computed_folder=r"C:\Users\wbou2\Desktop\meg_to_surface_ml\src\data"
+Y = SH.compute_Y(template_projection['theta'], template_projection['phi'], lmax)
+Y_file=os.path.join(pre_computed_folder,"Y_120.npz")
+np.savez(Y_file, Y=Y)
 Y=np.load(r"C:\Users\wbou2\Desktop\meg_to_surface_ml\src\data\Y_120.npz")['Y']
 Y_lh=Y[:,:(lmax+1)**2]
 
@@ -93,6 +99,8 @@ def main_matlab():
     # 2. Compute spherical harmonics coefficients
     coeffs = SH.compute_coefficients(Y_lh, template_projection['sphere_coords'], 
                                     resampled_surface, lmax, lambda_reg)
+    
+    print(coeffs['organized_coeffs'][1])
 
     # 3. Reconstruct surface (starting from l=1)
     reconstruction_coords = SH.generate_surface(Y_lh, lmax, sigma, orders=coeffs['organized_coeffs'])
@@ -231,6 +239,5 @@ def main_matlab():
 #     # p.show()
     
 
-   
 if __name__ == "__main__":
     results = main_matlab()
