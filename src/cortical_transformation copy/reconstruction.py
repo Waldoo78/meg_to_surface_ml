@@ -27,7 +27,7 @@ def load_template_data(template_path):
 #Parameters
 sigma=0
 lambda_reg=1e-9
-lmax = 4
+lmax = 27
 
 
 template_projection = pickle.load(open(r"C:\Users\wbou2\Desktop\meg_to_surface_ml\src\cortical_transformation\data\spherical_template.pkl", 'rb'))
@@ -153,84 +153,5 @@ def main_matlab():
         'coefficients': coeffs
     }
 
-from sklearn.decomposition import PCA
-def reduce_order_coeffs(coeffs_all_lh, l, n_components=0.98):
-   X_l = np.array([coeffs_all_lh[p][l] for p in coeffs_all_lh])
-   X_l = X_l.transpose(1, 0, 2)
-   X_l_real = X_l.real.reshape(X_l.shape[0], -1)
-   X_l_imag = X_l.imag.reshape(X_l.shape[0], -1)
-   X_combined = np.concatenate([X_l_real, X_l_imag], axis=1)
-   
-   pca = PCA(n_components=n_components)
-   reduced = pca.fit_transform(X_combined)
-   return reduced, pca, pca.explained_variance_ratio_
-
-def main_matlab_PCA():
-    left_faces_file =r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN\sub-CC712027\lh_faces.mat"
-    left_vertices_file =r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN\sub-CC712027\lh_vertices.mat"
-
-    # Load and center original surface
-    left_faces = load_faces(left_faces_file)
-    left_vertices = load_vertices(left_vertices_file)
-    left_vertices = left_vertices - left_vertices.mean(axis=0)
-
-    print("\n=== Starting Surface Reconstruction ===")
-
-    # Load and center resampled surface
-    resampled_surface = np.load(r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN\sub-CC712027\lh_resampled.npz")
-    r_coords, r_tris = resampled_surface["coords"], resampled_surface["tris"]
-    r_coords = r_coords-r_coords.mean(axis=0)
-    resampled_surface = (r_coords, r_tris)
-
-    # 2. Compute spherical harmonics coefficients
-    coeffs = SH.compute_coefficients(Y_lh, template_projection['sphere_coords'], 
-                                    resampled_surface, lmax, lambda_reg)
-    
-    # Réduire les coefficients avec PCA
-    reduced_coeffs = {}
-    pcas = {}
-    for l in range(1, lmax+1):
-        reduced_data, pca_model, _ = reduce_order_coeffs(coeffs['organized_coeffs'], l, n_components=0.98)
-        # Inverse transform pour reconstruire les coefficients
-        reconstructed = pca_model.inverse_transform(reduced_data)
-        # Reshape back to original format
-        real_part = reconstructed[:, :reconstructed.shape[1]//2]
-        imag_part = reconstructed[:, reconstructed.shape[1]//2:]
-        complex_coeffs = real_part + 1j * imag_part
-        reduced_coeffs[l] = complex_coeffs.reshape(-1, 3).T
-
-    # 3. Reconstruct both surfaces
-    reconstruction_coords = SH.generate_surface(Y_lh, lmax, sigma, orders=coeffs['organized_coeffs'])
-    reconstruction_coords_pca = SH.generate_surface(Y_lh, lmax, sigma, orders=reduced_coeffs)
-    
-    tris1 = convert_triangles_to_pyvista(left_faces)
-    tris2 = convert_triangles_to_pyvista(r_tris)
-
-    p = pv.Plotter(shape=(2,2))
-
-    p.subplot(0,0)
-    mesh1 = pv.PolyData(left_vertices, tris1)
-    p.add_mesh(mesh1, show_edges=True, color="blue")
-    p.add_text("Original (centered)", position='upper_edge')
-
-    p.subplot(0,1)
-    mesh2 = pv.PolyData(r_coords, tris2)
-    p.add_mesh(mesh2, show_edges=True, color="green")
-    p.add_text("Resampled (centered)", position='upper_edge')
-
-    p.subplot(1,0)
-    mesh3 = pv.PolyData(reconstruction_coords, tris2)
-    p.add_mesh(mesh3, show_edges=True, color="red")
-    p.add_text("Normal Reconstruction", position='upper_edge')
-
-    p.subplot(1,1)
-    mesh4 = pv.PolyData(reconstruction_coords_pca, tris2)
-    p.add_mesh(mesh4, show_edges=True, color="purple")
-    p.add_text("PCA Reconstruction", position='upper_edge')
-
-    p.link_views()
-    p.show()
-    
-
 if __name__ == "__main__":
-    results = main_matlab_PCA()
+    results = main_matlab()

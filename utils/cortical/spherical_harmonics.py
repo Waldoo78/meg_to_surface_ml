@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.special import sph_harm
-from utils.mathutils import cart_to_sph
+from utils.mathutils import cart_to_sph, sph_to_cart
 
 def compute_Y(theta, phi, lmax):
     N = len(theta)
@@ -58,10 +58,11 @@ def compute_coefficients(Y, template_projection, resampled_surface, lmax, lambda
     target_coords, target_tris = resampled_surface
     template_center = np.mean(template_projection, axis=0)
     
-    coeffs = np.linalg.lstsq(Y, target_coords - template_center, rcond=lambda_reg)[0]
+    coeffs = np.linalg.lstsq(Y, target_coords, rcond=lambda_reg)[0]
     
     return {
         'organized_coeffs': organize_coeffs(coeffs, lmax),
         'lmax': lmax,
         'template_center': template_center  
     }
+

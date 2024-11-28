@@ -6,17 +6,6 @@ from s3pipe.surface.surf import Surface
 
 
 def cart_to_sph(coords):
-    """Converts Cartesian coordinates to spherical coordinates
-    
-    Args:
-        coords (ndarray): Cartesian coordinates (N_points, 3)
-        
-    Returns:
-        tuple: (r, theta, phi) where:
-            r (ndarray): radial distance
-            theta (ndarray): azimuthal angle [0, 2π]
-            phi (ndarray): polar angle [0, π]
-    """
     x, y, z = coords.T
     
     r = np.sqrt(x**2 + y**2 + z**2)
@@ -27,22 +16,6 @@ def cart_to_sph(coords):
     return r, theta, phi
 
 def sph_to_cart(r, theta, phi):
-    """Convert spherical coordinates to Cartesian coordinates.
-    
-    Args:
-        r (ndarray): Radial distance from origin
-        theta (ndarray): Azimuthal angle in radians [0, 2π] in x-y plane from x-axis (longitude)
-        phi (ndarray): Polar angle in radians [0, π] from z-axis (colatitude)
-        
-    Returns:
-        ndarray: Array of shape (n, 3) containing the x, y, z Cartesian coordinates
-        
-    Note:
-        The convention used is:
-        x = r * cos(theta) * sin(phi)
-        y = r * sin(theta) * sin(phi)
-        z = r * cos(phi)
-    """
     x = r * np.cos(theta) * np.sin(phi)
     y = r * np.sin(theta) * np.sin(phi)
     z = r * np.cos(phi)
@@ -50,22 +23,12 @@ def sph_to_cart(r, theta, phi):
     return np.column_stack((x, y, z))
 
 def hausdorff_distance(array1, array2):
-    """Compute the Hausdorff distance between two 3D point clouds.
-    
-    Args:
-        array1 (ndarray): First array of 3D points
-        array2 (ndarray): Second array of 3D points
-        
-    Returns:
-        float: Hausdorff distance between the point clouds
-    """
     distance_1 = directed_hausdorff(array1, array2)[0]
     distance_2 = directed_hausdorff(array2, array1)[0]
     return max(distance_1, distance_2)
 
 
 def compute_surface_metrics(generated_coords, reference_coords, triangles):
-    """Computes comparison metrics between generated and reference brain surfaces."""
     
     center = np.mean(reference_coords, axis=0)
     ref_centered = reference_coords - center
@@ -83,7 +46,6 @@ def compute_surface_metrics(generated_coords, reference_coords, triangles):
     ref_areas = sprop.computeVertexArea(ref_surf)
     gen_areas = sprop.computeVertexArea(gen_surf)
     
-    # Construction directe du dictionnaire
     return {
         'raw_metrics': {
             'reference_curvature': ref_curvature,
