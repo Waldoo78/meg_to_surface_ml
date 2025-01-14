@@ -1,0 +1,9 @@
+Your task is to create a new file type with a “Buffer”.
+Every time you write data to this file, you use the Write method like write(“hello world”), but if you have enough buffer in memory (buffer_size), you write to buffer first. Only write to disk when the buffer is full (using the flush method to write to disk).
+Implement both the Write and flush functions
+
+
+Je prends un MEG issu d'un des cerveaux: je regarde la free energy pour tous.
+Traitement MEG ? 
+ensuite impelmentation MEG avec hyperparametres et tout
+et je selectionne

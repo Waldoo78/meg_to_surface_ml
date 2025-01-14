@@ -10,13 +10,8 @@ from .spherical_harmonics import (
    organize_coeffs,
    generate_surface,
    get_spherical_params,
-   compute_coefficients
-)
-
-from .visualization import (
-   show_comparison,
-   show_surface,
-   show_spherical_projection  
+   compute_coefficients,
+   compute_coefficients_SVD
 )
 
 __all__ = [
@@ -27,14 +22,10 @@ __all__ = [
    'generate_surface',
    'get_spherical_params',
    'compute_coefficients',
+   'compute_coefficients_SVD'
 
    # Surface preprocess 
    'get_spherical_projection',
    'get_resampled_inner_surface',
-
-   # Visualization
-   'show_comparison',
-   'show_surface',
-   'show_spherical_projection'
 ]
 

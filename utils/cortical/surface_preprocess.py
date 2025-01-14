@@ -4,7 +4,7 @@ import numpy as np
 import pyvista as pv
 from utils.file_manip import vtk_processing
 from utils.file_manip.Matlab_to_array import load_faces, load_vertices
-from nilearn import surface
+
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -34,7 +34,7 @@ def get_spherical_projection(mesh_data, hemisphere='lh'):
     
     # Run S3MAP projection
     abs_path = os.path.abspath(input_vtk)
-    s3map_script = os.path.join(PROJECT_ROOT, "utils", "mesh", "S3MAP-main", "s3all.py")
+    s3map_script = os.path.join(PROJECT_ROOT, "utils", "cortical", "S3MAP-main", "s3all.py")
     cmd = f"python {s3map_script} -i {abs_path} --save_interim_results True --device CPU"
     print(f"Executing: {cmd}")
     os.system(cmd)
@@ -74,7 +74,7 @@ def get_resampled_inner_surface(mesh_data, hemisphere='lh'):
     
     # Run S3MAP projection
     abs_path = os.path.abspath(input_vtk)
-    s3map_script = os.path.join(PROJECT_ROOT, "utils", "mesh", "S3MAP-main", "s3all.py")
+    s3map_script = os.path.join(PROJECT_ROOT, "utils", "cortical", "S3MAP-main", "s3all.py")
     cmd = f"python {s3map_script} -i {abs_path} --save_interim_results True --device CPU"
     print(f"Executing: {cmd}")
     os.system(cmd)
@@ -88,4 +88,35 @@ def get_resampled_inner_surface(mesh_data, hemisphere='lh'):
     
     return target_coords, target_triangles
 
+def smooth_surface(vertices, faces, n_iterations=5, relaxation_factor=0.5):
+    """
+    Smooth a surface mesh using PyVista's smoothing function.
+    """
+    mesh = pv.PolyData(vertices, vtk_processing.convert_triangles_to_pyvista(faces))
+    smoothed_mesh = mesh.smooth(n_iter=n_iterations, 
+                              relaxation_factor=relaxation_factor,
+                              feature_smoothing=False,
+                              boundary_smoothing=True,
+                              edge_angle=100,
+                              feature_angle=100)
+    return smoothed_mesh.points
+
+def merge_hemis(hemi_lh, hemi_rh):
+    """
+    Merge left and right hemispheres while preserving their relative positions.
     
+    Args:
+        hemi_lh (tuple): (coordinates, triangles) for left hemisphere
+        hemi_rh (tuple): (coordinates, triangles) for right hemisphere
+        
+    Returns:
+        tuple: (merged coordinates, merged triangles)
+    """
+    lh_coords, lh_tris = hemi_lh
+    rh_coords, rh_tris = hemi_rh
+    
+    merged_coords = np.vstack([lh_coords, rh_coords])
+    rh_tris_adjusted = rh_tris + len(lh_coords)
+    merged_tris = np.vstack([lh_tris, rh_tris_adjusted])
+    
+    return merged_coords, merged_tris

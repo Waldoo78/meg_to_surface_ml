@@ -1,29 +1,37 @@
-
+# Python virtual environments
 venv/
 env/
 .env/
 .venv/
 
-__pycache__/
+# Python cache files
+**pycache**/
 .cache/
 *.pyc
 
+# Build and distribution
 dist/
 build/
 *.egg-info/
 
-
+# Test coverage
 .coverage
 htmlcov/
 
+# IDE files
 .idea/
 .vscode/
+
+# Editor temp files
 *.swp
 *.swo
+*.mdl
 
-
+# System files
 .DS_Store
-Thumbs.dbdata/
+Thumbs.db
 
-
-data/
+# Project specific
+/data/
+src/cortical_transformation/data/Y_*.npz
+utils/cortical/S3Map-main/

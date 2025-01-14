@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.special import sph_harm
-from utils.mathutils import cart_to_sph, sph_to_cart
+from utils.mathutils import cart_to_sph
 
 def compute_Y(theta, phi, lmax):
     N = len(theta)
@@ -16,7 +16,7 @@ def compute_Y(theta, phi, lmax):
         Y[:, idx] = sph_harm(0, l, theta, phi).flatten()
         idx += 1
         for m in range(1, l+1):
-            Y[:, idx] = (-1)**m * np.conjugate(ylm_neg[m-1]).flatten()
+            Y[:, idx] = (-1)**abs(m) * np.conjugate(ylm_neg[m-1]).flatten()
             idx += 1
     return Y
 
@@ -30,6 +30,7 @@ def organize_coeffs(coeffs, lmax):
     return orders
 
 def generate_surface(Y, lmax, sigma, orders):
+    # Generate the surface from the coeffcients
     N_points = Y.shape[0]
     xyz_total = np.zeros((N_points, 3), dtype=np.complex128)
     scales = np.array([np.exp(-l * (l + 1) * sigma) for l in range(1, lmax + 1)])
@@ -54,15 +55,28 @@ def get_spherical_params(sphere_coords,sphere_tris):
         'coords': sphere_coords, 'tris': sphere_tris,
     }
 
-def compute_coefficients(Y, template_projection, resampled_surface, lmax, lambda_reg=0):
+def compute_coefficients(Y, resampled_surface, lmax):
     target_coords, target_tris = resampled_surface
-    template_center = np.mean(template_projection, axis=0)
     
+    # Use LAPACK's SVD-based solver (GELSD) for optimal precision
+    import scipy.linalg as la
+    coeffs = np.column_stack([
+        la.lstsq(Y, target_coords[:, i], cond=None)[0]
+        for i in range(3)
+    ])
+    
+    return {
+        'organized_coeffs': organize_coeffs(coeffs, lmax),
+        'lmax': lmax
+    }
+
+def compute_coefficients_SVD(Y, resampled_surface, lmax, lambda_reg=0):
+    #Solve the system Y*coeffs=target_coords
+    target_coords, target_tris = resampled_surface
+
     coeffs = np.linalg.lstsq(Y, target_coords, rcond=lambda_reg)[0]
     
     return {
         'organized_coeffs': organize_coeffs(coeffs, lmax),
         'lmax': lmax,
-        'template_center': template_center  
     }
-

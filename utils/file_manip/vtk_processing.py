@@ -37,3 +37,22 @@ def save_to_vtk(coords,triangles, output_file):
        writer.SetFileName(output_file)
        writer.SetInputData(polydata)
        writer.Write()
+
+def convert_triangles_to_pyvista(triangles):
+    return triangles if triangles.shape[1] == 4 else np.column_stack((np.full(len(triangles), 3), triangles))
+
+
+if __name__=="__main__":
+     from utils.mathutils import cart_to_sph
+     import pickle
+     vtk_file=r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\cortical_transfo_data_utils\sphere_163842_rotated_0.vtk"
+     points, faces=vtk_mesh_to_array(vtk_file)
+     _,theta,phi=cart_to_sph(points)
+     template_projection={}
+     template_projection_path=r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\cortical_transfo_data_utils\template_projection"
+     template_projection['theta']=theta
+     template_projection["phi"]=phi
+     template_projection['sphere_tris']=faces
+     template_projection['coords']=points 
+     with open(template_projection_path, "wb") as f:
+          pickle.dump(template_projection,f)
