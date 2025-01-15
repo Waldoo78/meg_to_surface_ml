@@ -174,6 +174,27 @@ def visualize_merged_brain(merged_results):
     p.camera_position = 'xz'
     p.show()
 
+def reconstruct_brain(lh_center, rh_center, coeffs_lh, coeffs_rh, Y_lh_full, Y_rh_full, tris, l):
+   # Process left hemisphere
+   Y_l = Y_lh_full[:, :(l+1)**2]
+   org_coeffs_lh = {i: coeffs_lh['organized_coeffs'][i] for i in range(l+1)}
+   coords_lh = SH.generate_surface(Y_l, l, 0, org_coeffs_lh)
+   
+   # Process right hemisphere
+   Y_r = Y_rh_full[:, :(l+1)**2]
+   org_coeffs_rh = {i: coeffs_rh['organized_coeffs'][i] for i in range(l+1)}
+   coords_rh = SH.generate_surface(Y_r, l, 0, org_coeffs_rh)
+   
+   # Add centers back and merge
+   lh_reconstruction = coords_lh + lh_center
+   rh_reconstruction = coords_rh + rh_center
+   
+   reconstructed_merged_coords, reconstructed_merged_tris = sp.merge_hemis(
+       (lh_reconstruction, tris),
+       (rh_reconstruction, tris)
+   )
+   
+   return reconstructed_merged_coords, reconstructed_merged_tris
 
 if __name__ == "__main__":
    # Parameters
