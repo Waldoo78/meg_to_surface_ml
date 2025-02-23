@@ -2,8 +2,7 @@
 import numpy as np
 from scipy import sparse
 from scipy.spatial.distance import directed_hausdorff
-from s3pipe.surface.surf import Surface
-import s3pipe.surface.prop as sprop
+
 
 def cart_to_sph(coords):
     x, y, z = coords.T

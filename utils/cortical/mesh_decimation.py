@@ -3,7 +3,6 @@ import os
 import pickle
 from utils.cortical import spherical_harmonics as SH
 from src.cortical_transformation.reconstruction import reconstruct_brain
-import pyvista as pv 
 from utils.file_manip.vtk_processing import convert_triangles_to_pyvista
 
 
@@ -11,20 +10,20 @@ def reduce_mesh_using_matlab(vertices, faces, target_vertices):
     try:
         import matlab.engine
         
-        # Démarrer le moteur MATLAB
+        # Start MATLAB engine
         eng = matlab.engine.start_matlab()
         
-        # Convertir les numpy arrays en matrices MATLAB
+        # Convert numpy arrays to MATLAB matrices
         matlab_vertices = matlab.double(vertices.tolist())
-        # +1 pour passer de l'indexation Python (0-based) à MATLAB (1-based)
+        # +1 for Python (0-based) to MATLAB (1-based) indexing
         matlab_faces = matlab.double((faces + 1).tolist())
         
         ratio = float(target_vertices) / vertices.shape[0]
         
-        # Appeler reducepatch
+        # Call reducepatch
         faces_reduced, vertices_reduced = eng.reducepatch(matlab_faces, matlab_vertices, ratio, nargout=2)
         
-        # Convertir retour en numpy arrays et -1 pour repasser en indexation Python
+        # Convert back to numpy arrays and -1 for Python indexing
         vertices_reduced = np.array(vertices_reduced)
         faces_reduced = np.array(faces_reduced, dtype=np.int32) - 1
         
@@ -35,65 +34,92 @@ def reduce_mesh_using_matlab(vertices, faces, target_vertices):
     except Exception as e:
         if 'eng' in locals():
             eng.quit()
-        raise RuntimeError(f"Erreur lors de l'exécution de reducepatch: {str(e)}")
+        raise RuntimeError(f"Error in reducepatch: {str(e)}")
 
-def generate_and_save_surfaces(main_folder, Y_lh_full, Y_rh_full, coeffs_diff_lh, coeffs_diff_rh, lh_center, rh_center, lmax, sigma, fsaverage_path):
-    # Slice Y matrices according to lmax
-    Y_lh = Y_lh_full[:, :(lmax+1)**2]
-    Y_rh = Y_rh_full[:, :(lmax+1)**2]
-    
+def generate_and_save_surfaces(main_folder, Y_lh_full, Y_rh_full, coeffs_diff_lh, 
+                            coeffs_diff_rh, lh_center, rh_center, lmax, sigma, 
+                            fsaverage_path, merge):
+    # Load fsaverage template data
     with open(os.path.join(fsaverage_path, "coeffs_lh.pkl"), 'rb') as f:
         coeffs_fsav_lh_full = pickle.load(f)['organized_coeffs']
     fsav_data_lh = np.load(os.path.join(fsaverage_path, "lh_resampled.npz"))
     tris = fsav_data_lh['tris']
-
+    
     with open(os.path.join(fsaverage_path, "coeffs_rh.pkl"), 'rb') as f:
         coeffs_fsav_rh_full = pickle.load(f)['organized_coeffs']
 
-    # Tronquer les coefficients fsaverage à l'ordre lmax
+    # Truncate fsaverage coefficients to lmax
     coeffs_fsav_lh = {l: coeffs_fsav_lh_full[l] for l in range(lmax + 1)}
     coeffs_fsav_rh = {l: coeffs_fsav_rh_full[l] for l in range(lmax + 1)}
                 
-    # Add coefficients to fsaverage
-    coeffs_sum_lh = {}
-    coeffs_sum_rh = {}
-
-    coeffs_sum_lh[0] = coeffs_fsav_lh[0] 
-    coeffs_sum_rh[0] = coeffs_fsav_rh[0]
+    # Sum coefficients 
+    coeffs_sum_lh = {
+        0: coeffs_fsav_lh[0], 
+        **{l: coeffs_fsav_lh[l] + coeffs_diff_lh['organized_coeffs'][l] 
+           for l in range(1, lmax + 1)}
+    }
     
-    # For each degree l, starting from 1
-    for l in range(1, lmax + 1):
-        coeffs_sum_lh[l] = coeffs_fsav_lh[l] + coeffs_diff_lh['organized_coeffs'][l]
-        coeffs_sum_rh[l] = coeffs_fsav_rh[l] + coeffs_diff_rh['organized_coeffs'][l]
+    coeffs_sum_rh = {
+        0: coeffs_fsav_rh[0],
+        **{l: coeffs_fsav_rh[l] + coeffs_diff_rh['organized_coeffs'][l] 
+           for l in range(1, lmax + 1)}
+    }
 
-    # Préparer les dictionnaires de coefficients
     coeffs_lh = {'organized_coeffs': coeffs_sum_lh}
     coeffs_rh = {'organized_coeffs': coeffs_sum_rh}
 
-    # Utiliser reconstruct_brain
-    reconstructed_coords, reconstructed_tris = reconstruct_brain(
-        lh_center=lh_center,
-        rh_center=rh_center,
-        coeffs_lh=coeffs_lh,
-        coeffs_rh=coeffs_rh,
-        Y_lh_full=Y_lh_full,
-        Y_rh_full=Y_rh_full,
-        tris=tris,
-        l=lmax
-    )
-
-    vertices_reduced, faces_reduced = reduce_mesh_using_matlab(
-        reconstructed_coords, 
-        reconstructed_tris,
-        target_vertices=15000
-    )
-    
-    return vertices_reduced, faces_reduced
-    
+    # Get reconstructed surfaces
+    if merge==True:
+        reconstructed_coords, reconstructed_tris = reconstruct_brain(
+            lh_center=lh_center,
+            rh_center=rh_center,
+            coeffs_lh=coeffs_lh,
+            coeffs_rh=coeffs_rh,
+            Y_lh_full=Y_lh_full,
+            Y_rh_full=Y_rh_full,
+            tris=tris,
+            l=lmax,
+            merge=True
+        )
+        # Decimate merged brain
+        vertices_reduced, faces_reduced = reduce_mesh_using_matlab(
+            reconstructed_coords, 
+            reconstructed_tris,
+            target_vertices=15000
+        )
+        return vertices_reduced, faces_reduced
+    else:
+        # Get separate hemispheres
+        lh_coords, rh_coords, hemi_tris = reconstruct_brain(
+            lh_center=lh_center,
+            rh_center=rh_center,
+            coeffs_lh=coeffs_lh,
+            coeffs_rh=coeffs_rh,
+            Y_lh_full=Y_lh_full,
+            Y_rh_full=Y_rh_full,
+            tris=tris,
+            l=lmax,
+            merge=False
+        )
+        
+        # Calculate proportion for decimation
+        total_vertices = len(lh_coords) + len(rh_coords)
+        lh_target = int(15000 * (len(lh_coords) / total_vertices))
+        rh_target = 15000 - lh_target  # ensures total is exactly 15000
+        
+        # Decimate each hemisphere
+        lh_verts_reduced, lh_faces_reduced = reduce_mesh_using_matlab(
+            lh_coords, hemi_tris, target_vertices=lh_target
+        )
+        rh_verts_reduced, rh_faces_reduced = reduce_mesh_using_matlab(
+            rh_coords, hemi_tris, target_vertices=rh_target
+        )
+        
+        return (lh_verts_reduced, lh_faces_reduced), (rh_verts_reduced, rh_faces_reduced)
 
 if __name__=="__main__":
     import time 
-    
+    import pyvista as pv
     main_folder = r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN"
     data_path=r"C:\Users\wbou2\Desktop\meg_to_surface_ml\src\cortical_transformation\data"
     fsaverage_path=r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\fsaverage"

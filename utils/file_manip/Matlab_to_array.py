@@ -1,7 +1,5 @@
 import numpy as np
 import scipy.io
-import os
-import pyvista as pv
 
 def load_faces(file_path):
     """Charge les faces depuis un fichier .mat"""

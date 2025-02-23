@@ -1,0 +1,17 @@
+# Scientific Computing
+numpy>=1.20.0
+scipy>=1.7.0
+jax>=0.4.1
+
+# 3D Visualization and Processing
+pyvista>=0.34.0
+vtk>=9.1.0
+
+# Neuroimaging
+mne>=1.0.0
+
+# File Management
+pickle-mixin>=1.0.2
+
+# Data Processing
+sparse>=0.13.0

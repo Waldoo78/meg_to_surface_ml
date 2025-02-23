@@ -6,8 +6,6 @@ from utils.mathutils import compute_vertex_normals, build_template_adjacency_two
 from utils.cortical import spherical_harmonics as SH 
 from utils.cortical import surface_preprocess as sp
 from utils.file_manip.vtk_processing import convert_triangles_to_pyvista
-import scipy.io as sio
-
 
 def reconstruct_hemisphere_core(vertices_file, faces_file, resampled_surface, Y, 
                               template_projection, lmax, sigma, lambda_reg=1e-8):
@@ -174,27 +172,31 @@ def visualize_merged_brain(merged_results):
     p.camera_position = 'xz'
     p.show()
 
-def reconstruct_brain(lh_center, rh_center, coeffs_lh, coeffs_rh, Y_lh_full, Y_rh_full, tris, l):
-   # Process left hemisphere
-   Y_l = Y_lh_full[:, :(l+1)**2]
-   org_coeffs_lh = {i: coeffs_lh['organized_coeffs'][i] for i in range(l+1)}
-   coords_lh = SH.generate_surface(Y_l, l, 0, org_coeffs_lh)
-   
-   # Process right hemisphere
-   Y_r = Y_rh_full[:, :(l+1)**2]
-   org_coeffs_rh = {i: coeffs_rh['organized_coeffs'][i] for i in range(l+1)}
-   coords_rh = SH.generate_surface(Y_r, l, 0, org_coeffs_rh)
-   
-   # Add centers back and merge
-   lh_reconstruction = coords_lh + lh_center
-   rh_reconstruction = coords_rh + rh_center
-   
-   reconstructed_merged_coords, reconstructed_merged_tris = sp.merge_hemis(
-       (lh_reconstruction, tris),
-       (rh_reconstruction, tris)
-   )
-   
-   return reconstructed_merged_coords, reconstructed_merged_tris
+def reconstruct_brain(lh_center, rh_center, coeffs_lh, coeffs_rh, Y_lh_full, Y_rh_full, tris, l, merge):
+    # Process left hemisphere
+    Y_l = Y_lh_full[:, :(l+1)**2]
+    org_coeffs_lh = coeffs_lh['organized_coeffs'] 
+    coords_lh = SH.generate_surface(Y_l, l, 0, org_coeffs_lh)
+
+    # Process right hemisphere  
+    Y_r = Y_rh_full[:, :(l+1)**2]
+    org_coeffs_rh = coeffs_rh['organized_coeffs']
+    coords_rh = SH.generate_surface(Y_r, l, 0, org_coeffs_rh)
+
+    # Add centers back
+    lh_reconstruction = coords_lh + lh_center
+    rh_reconstruction = coords_rh + rh_center
+
+    if merge:
+        # Merge hemispheres
+        reconstructed_merged_coords, reconstructed_merged_tris = sp.merge_hemis(
+            (lh_reconstruction, tris),
+            (rh_reconstruction, tris)
+        )
+        return reconstructed_merged_coords, reconstructed_merged_tris
+    else:
+        # Return separate hemispheres
+        return lh_reconstruction, rh_reconstruction, tris
 
 if __name__ == "__main__":
    # Parameters
@@ -278,170 +280,170 @@ if __name__ == "__main__":
 
 
 
-   TessMat = {
-        'Vertices': vertices_reconstructed,
-        'Faces': full_faces + 1  # +1 as Matlab begins at 1 
-    }
-   sio.savemat(os.path.join(subject_folder, 'brain_reconstructed.mat'), {'TessMat': TessMat})
+#    TessMat = {
+#         'Vertices': vertices_reconstructed,
+#         'Faces': full_faces + 1  # +1 as Matlab begins at 1 
+#     }
+#    sio.savemat(os.path.join(subject_folder, 'brain_reconstructed.mat'), {'TessMat': TessMat})
 
    
-#    vertex_to_faces = build_template_adjacency_two_hemis(
-#        template_projection_lh['sphere_tris'],
-#        template_projection_rh['sphere_tris']
-#    )
+   vertex_to_faces = build_template_adjacency_two_hemis(
+       template_projection_lh['sphere_tris'],
+       template_projection_rh['sphere_tris']
+   )
 
-#    # Smooth resampled surface
-#    print("Smoothing surfaces and computing normals...")
-#    vertices_resampled_smooth = sp.smooth_surface(vertices_resampled, full_faces, 
-#                                             n_iterations=5, relaxation_factor=0.5)
+   # Smooth resampled surface
+   print("Smoothing surfaces and computing normals...")
+   vertices_resampled_smooth = sp.smooth_surface(vertices_resampled, full_faces, 
+                                            n_iterations=5, relaxation_factor=0.5)
    
-#    # Point-to-point distance visualization
-#    print("\nVisualizing point-to-point distances...")
-#    pl = pv.Plotter(shape=(1, 2))
+   # Point-to-point distance visualization
+   print("\nVisualizing point-to-point distances...")
+   pl = pv.Plotter(shape=(1, 2))
    
-#    # Resampled surface
-#    pl.subplot(0, 0)
-#    mesh_resampled = pv.PolyData(vertices_resampled_smooth, convert_triangles_to_pyvista(full_faces))
-#    pl.add_mesh(mesh_resampled, color='lightgray', show_edges=True, 
-#                edge_color='black', line_width=1)
-#    pl.add_text("Resampled Surface", position='upper_edge')
-#    pl.view_isometric()
+   # Resampled surface
+   pl.subplot(0, 0)
+   mesh_resampled = pv.PolyData(vertices_resampled_smooth, convert_triangles_to_pyvista(full_faces))
+   pl.add_mesh(mesh_resampled, color='lightgray', show_edges=True, 
+               edge_color='black', line_width=1)
+   pl.add_text("Resampled Surface", position='upper_edge')
+   pl.view_isometric()
    
-#    # Distance errors
-#    pl.subplot(0, 1)
-#    mesh_reconstructed = pv.PolyData(vertices_reconstructed, convert_triangles_to_pyvista(full_faces))
-#    distances = np.sqrt(np.sum((vertices_resampled_smooth - vertices_reconstructed)**2, axis=1)) * 1000  # Convert to mm
+   # Distance errors
+   pl.subplot(0, 1)
+   mesh_reconstructed = pv.PolyData(vertices_reconstructed, convert_triangles_to_pyvista(full_faces))
+   distances = np.sqrt(np.sum((vertices_resampled_smooth - vertices_reconstructed)**2, axis=1)) * 1000  # Convert to mm
    
-#    pl.add_mesh(mesh_reconstructed, scalars=distances, cmap='viridis',
-#                show_edges=True, edge_color='black', line_width=1,
-#                scalar_bar_args={'title': 'Distance Error (mm)',
-#                               'n_labels': 5,
-#                               'position_x': 0.05,
-#                               'position_y': 0.05,
-#                               'width': 0.3,
-#                               'height': 0.05})
-#    pl.add_text(f"Point-to-point distance errors\nMean: {np.mean(distances):.2f} mm\nMax: {np.max(distances):.2f} mm", 
-#                position='upper_edge')
-#    pl.view_isometric()
-#    pl.link_views()
-#    pl.show()
+   pl.add_mesh(mesh_reconstructed, scalars=distances, cmap='viridis',
+               show_edges=True, edge_color='black', line_width=1,
+               scalar_bar_args={'title': 'Distance Error (mm)',
+                              'n_labels': 5,
+                              'position_x': 0.05,
+                              'position_y': 0.05,
+                              'width': 0.3,
+                              'height': 0.05})
+   pl.add_text(f"Point-to-point distance errors\nMean: {np.mean(distances):.2f} mm\nMax: {np.max(distances):.2f} mm", 
+               position='upper_edge')
+   pl.view_isometric()
+   pl.link_views()
+   pl.show()
 
-#    # Compute normals and analyze differences
-#    print("\nComputing normal analysis...")
-#    normals_resampled = compute_vertex_normals(vertices_resampled_smooth, full_faces, vertex_to_faces, n_rings=2)
-#    normals_reconstructed = compute_vertex_normals(vertices_reconstructed, full_faces, vertex_to_faces, n_rings=2)
-#    angles = np.degrees(np.arccos(np.clip(np.sum(normals_resampled * normals_reconstructed, axis=1), -1.0, 1.0)))
+   # Compute normals and analyze differences
+   print("\nComputing normal analysis...")
+   normals_resampled = compute_vertex_normals(vertices_resampled_smooth, full_faces, vertex_to_faces, n_rings=2)
+   normals_reconstructed = compute_vertex_normals(vertices_reconstructed, full_faces, vertex_to_faces, n_rings=2)
+   angles = np.degrees(np.arccos(np.clip(np.sum(normals_resampled * normals_reconstructed, axis=1), -1.0, 1.0)))
    
-#    # Normal angle error visualization
-#    print("\nVisualizing normal angle errors...")
-#    pl = pv.Plotter(shape=(1, 3))
+   # Normal angle error visualization
+   print("\nVisualizing normal angle errors...")
+   pl = pv.Plotter(shape=(1, 3))
    
-#    # Resampled surface
-#    pl.subplot(0, 0)
-#    mesh_resampled = pv.PolyData(vertices_resampled_smooth, convert_triangles_to_pyvista(full_faces))
-#    pl.add_mesh(mesh_resampled, color='lightgray', show_edges=True, 
-#                edge_color='black', line_width=1)
-#    pl.add_text("Resampled Surface", position='upper_edge')
-#    pl.view_isometric()
+   # Resampled surface
+   pl.subplot(0, 0)
+   mesh_resampled = pv.PolyData(vertices_resampled_smooth, convert_triangles_to_pyvista(full_faces))
+   pl.add_mesh(mesh_resampled, color='lightgray', show_edges=True, 
+               edge_color='black', line_width=1)
+   pl.add_text("Resampled Surface", position='upper_edge')
+   pl.view_isometric()
    
-#    # Reconstructed surface
-#    pl.subplot(0, 1)
-#    mesh_reconstructed = pv.PolyData(vertices_reconstructed, convert_triangles_to_pyvista(full_faces))
-#    pl.add_mesh(mesh_reconstructed, color='lightgray', show_edges=True, 
-#                edge_color='black', line_width=1)
-#    pl.add_text("Reconstructed Surface", position='upper_edge')
-#    pl.view_isometric()
+   # Reconstructed surface
+   pl.subplot(0, 1)
+   mesh_reconstructed = pv.PolyData(vertices_reconstructed, convert_triangles_to_pyvista(full_faces))
+   pl.add_mesh(mesh_reconstructed, color='lightgray', show_edges=True, 
+               edge_color='black', line_width=1)
+   pl.add_text("Reconstructed Surface", position='upper_edge')
+   pl.view_isometric()
    
-#    # Normal angle errors with better visibility
-#    pl.subplot(0, 2)
-#    high_angle_mask = angles >= 45
-#    angle_colors = np.zeros((len(vertices_reconstructed), 3))
-#    angle_colors[~high_angle_mask] = np.array([0.8, 0.8, 0.8])  # light gray
-#    angle_colors[high_angle_mask] = np.array([1.0, 0.0, 0.0])   # bright red
+   # Normal angle errors with better visibility
+   pl.subplot(0, 2)
+   high_angle_mask = angles >= 45
+   angle_colors = np.zeros((len(vertices_reconstructed), 3))
+   angle_colors[~high_angle_mask] = np.array([0.8, 0.8, 0.8])  # light gray
+   angle_colors[high_angle_mask] = np.array([1.0, 0.0, 0.0])   # bright red
    
-#    pl.add_mesh(mesh_reconstructed, 
-#                scalars=angle_colors,
-#                rgb=True,
-#                show_edges=True, 
-#                edge_color='black', 
-#                line_width=1)
-#    pl.add_text(f"Normal angle errors\nMean: {np.mean(angles):.2f}°\nMax: {np.max(angles):.2f}°\nRed areas: >45°\nPercentage red: {100*np.sum(high_angle_mask)/len(angles):.1f}%", 
-#                position='upper_edge')
-#    pl.view_isometric()
-#    pl.link_views()
-#    pl.show()
+   pl.add_mesh(mesh_reconstructed, 
+               scalars=angle_colors,
+               rgb=True,
+               show_edges=True, 
+               edge_color='black', 
+               line_width=1)
+   pl.add_text(f"Normal angle errors\nMean: {np.mean(angles):.2f}°\nMax: {np.max(angles):.2f}°\nRed areas: >45°\nPercentage red: {100*np.sum(high_angle_mask)/len(angles):.1f}%", 
+               position='upper_edge')
+   pl.view_isometric()
+   pl.link_views()
+   pl.show()
 
-#    # Curvature analysis
-#    print("\nComputing curvature analysis...")
-#    curvature_resampled = compute_mean_curvature(vertices_resampled_smooth, full_faces, vertex_to_faces)
-#    curvature_reconstructed = compute_mean_curvature(vertices_reconstructed, full_faces, vertex_to_faces)
-#    curvature_diff = np.abs(curvature_resampled - curvature_reconstructed)
+   # Curvature analysis
+   print("\nComputing curvature analysis...")
+   curvature_resampled = compute_mean_curvature(vertices_resampled_smooth, full_faces, vertex_to_faces)
+   curvature_reconstructed = compute_mean_curvature(vertices_reconstructed, full_faces, vertex_to_faces)
+   curvature_diff = np.abs(curvature_resampled - curvature_reconstructed)
 
 
-#    # Curvature visualization
-#    print("\nVisualizing mean curvature...")
-#    pl = pv.Plotter(shape=(1, 2))
+   # Curvature visualization
+   print("\nVisualizing mean curvature...")
+   pl = pv.Plotter(shape=(1, 2))
 
-#    # Resampled surface curvature
-#    pl.subplot(0, 0)
-#    curvature_range = np.maximum(abs(np.min(curvature_resampled)), abs(np.max(curvature_resampled)))
-#    pl.add_mesh(mesh_resampled, scalars=curvature_resampled, cmap='coolwarm',
-#                show_edges=True, edge_color='black', line_width=1,
-#                clim=[-curvature_range, curvature_range],
-#                scalar_bar_args={'title': 'Mean Curvature (1/mm)',
-#                               'n_labels': 5,
-#                               'position_x': 0.05,
-#                               'position_y': 0.05,
-#                               'width': 0.3,
-#                               'height': 0.05})
-#    pl.add_text(f"Resampled Surface Mean Curvature\nRange: [{np.min(curvature_resampled):.3f}, {np.max(curvature_resampled):.3f}]", 
-#                position='upper_edge')
-#    pl.view_isometric()
+   # Resampled surface curvature
+   pl.subplot(0, 0)
+   curvature_range = np.maximum(abs(np.min(curvature_resampled)), abs(np.max(curvature_resampled)))
+   pl.add_mesh(mesh_resampled, scalars=curvature_resampled, cmap='coolwarm',
+               show_edges=True, edge_color='black', line_width=1,
+               clim=[-curvature_range, curvature_range],
+               scalar_bar_args={'title': 'Mean Curvature (1/mm)',
+                              'n_labels': 5,
+                              'position_x': 0.05,
+                              'position_y': 0.05,
+                              'width': 0.3,
+                              'height': 0.05})
+   pl.add_text(f"Resampled Surface Mean Curvature\nRange: [{np.min(curvature_resampled):.3f}, {np.max(curvature_resampled):.3f}]", 
+               position='upper_edge')
+   pl.view_isometric()
 
-#    # Curvature differences
-#    pl.subplot(0, 1)
-#    pl.add_mesh(mesh_reconstructed, scalars=curvature_diff, cmap='viridis',
-#                show_edges=True, edge_color='black', line_width=1,
-#                scalar_bar_args={'title': 'Curvature Difference (1/mm)',
-#                               'n_labels': 5,
-#                               'position_x': 0.05,
-#                               'position_y': 0.05,
-#                               'width': 0.3,
-#                               'height': 0.05})
-#    pl.add_text(f"Curvature Error\nMean: {np.mean(curvature_diff):.3f}\nMax: {np.max(curvature_diff):.3f}", 
-#                position='upper_edge')
-#    pl.view_isometric()
+   # Curvature differences
+   pl.subplot(0, 1)
+   pl.add_mesh(mesh_reconstructed, scalars=curvature_diff, cmap='viridis',
+               show_edges=True, edge_color='black', line_width=1,
+               scalar_bar_args={'title': 'Curvature Difference (1/mm)',
+                              'n_labels': 5,
+                              'position_x': 0.05,
+                              'position_y': 0.05,
+                              'width': 0.3,
+                              'height': 0.05})
+   pl.add_text(f"Curvature Error\nMean: {np.mean(curvature_diff):.3f}\nMax: {np.max(curvature_diff):.3f}", 
+               position='upper_edge')
+   pl.view_isometric()
 
-#    pl.link_views()
-#    pl.show()
+   pl.link_views()
+   pl.show()
 
-#    # Print summary statistics
-#    print("\n=== Analysis Summary ===")
-#    print("\nPoint-to-point distances (mm):")
-#    print(f"Mean: {np.mean(distances):.2f}")
-#    print(f"Max: {np.max(distances):.2f}")
-#    print(f"95th percentile: {np.percentile(distances, 95):.2f}")
+   # Print summary statistics
+   print("\n=== Analysis Summary ===")
+   print("\nPoint-to-point distances (mm):")
+   print(f"Mean: {np.mean(distances):.2f}")
+   print(f"Max: {np.max(distances):.2f}")
+   print(f"95th percentile: {np.percentile(distances, 95):.2f}")
 
-#    print("\nNormal angles (degrees):")
-#    print(f"Mean: {np.mean(angles):.2f}")
-#    print(f"Max: {np.max(angles):.2f}")
-#    print(f"95th percentile: {np.percentile(angles, 95):.2f}")
-#    print(f"Percentage >45°: {100*np.sum(angles > 45)/len(angles):.1f}%")
+   print("\nNormal angles (degrees):")
+   print(f"Mean: {np.mean(angles):.2f}")
+   print(f"Max: {np.max(angles):.2f}")
+   print(f"95th percentile: {np.percentile(angles, 95):.2f}")
+   print(f"Percentage >45°: {100*np.sum(angles > 45)/len(angles):.1f}%")
 
-#    print("\n=== Mean Curvature Analysis ===")
-#    print("\nResampled surface:")
-#    print(f"- Mean curvature: {np.mean(curvature_resampled):.4f}")
-#    print(f"- Standard deviation: {np.std(curvature_resampled):.4f}")
-#    print(f"- Min/Max: {np.min(curvature_resampled):.4f} / {np.max(curvature_resampled):.4f}")
+   print("\n=== Mean Curvature Analysis ===")
+   print("\nResampled surface:")
+   print(f"- Mean curvature: {np.mean(curvature_resampled):.4f}")
+   print(f"- Standard deviation: {np.std(curvature_resampled):.4f}")
+   print(f"- Min/Max: {np.min(curvature_resampled):.4f} / {np.max(curvature_resampled):.4f}")
 
-#    print("\nReconstructed surface:")
-#    print(f"- Mean curvature: {np.mean(curvature_reconstructed):.4f}")
-#    print(f"- Standard deviation: {np.std(curvature_reconstructed):.4f}")
-#    print(f"- Min/Max: {np.min(curvature_reconstructed):.4f} / {np.max(curvature_reconstructed):.4f}")
+   print("\nReconstructed surface:")
+   print(f"- Mean curvature: {np.mean(curvature_reconstructed):.4f}")
+   print(f"- Standard deviation: {np.std(curvature_reconstructed):.4f}")
+   print(f"- Min/Max: {np.min(curvature_reconstructed):.4f} / {np.max(curvature_reconstructed):.4f}")
 
-#    print("\nCurvature differences:")
-#    print(f"- Mean absolute difference: {np.mean(curvature_diff):.4f}")
-#    print(f"- Difference std: {np.std(curvature_diff):.4f}")
-#    print(f"- Max difference: {np.max(curvature_diff):.4f}")
-#    print(f"- 75th percentile: {np.percentile(curvature_diff, 75):.4f}")
-#    print(f"- 95th percentile: {np.percentile(curvature_diff, 95):.4f}")
+   print("\nCurvature differences:")
+   print(f"- Mean absolute difference: {np.mean(curvature_diff):.4f}")
+   print(f"- Difference std: {np.std(curvature_diff):.4f}")
+   print(f"- Max difference: {np.max(curvature_diff):.4f}")
+   print(f"- 75th percentile: {np.percentile(curvature_diff, 75):.4f}")
+   print(f"- 95th percentile: {np.percentile(curvature_diff, 95):.4f}")

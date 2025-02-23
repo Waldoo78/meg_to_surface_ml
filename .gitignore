@@ -34,4 +34,4 @@ Thumbs.db
 # Project specific
 /data/
 src/cortical_transformation/data/Y_*.npz
-utils/cortical/S3Map-main/
+utils/cortical/S3Map/
