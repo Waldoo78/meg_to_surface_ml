@@ -3,12 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![JAX](https://img.shields.io/badge/JAX-enabled-green.svg)](https://github.com/google/jax)
-[![Dependencies](https://img.shields.io/badge/dependencies-up%20to%20date-brightgreen.svg)](https://github.com/yourusername/cortical-transformation/blob/main/requirements.txt)
-
-<div align="center">
-  <img src="https://github.com/yourusername/cortical-transformation/raw/main/docs/images/pipeline_diagram.png" alt="Pipeline Diagram" width="750px">
-  <p><i>Replace with your actual pipeline visualization image</i></p>
-</div>
+[![Dependencies](https://img.shields.io/badge/dependencies-up%20to%20date-brightgreen.svg)](https://github.com/Waldoo78/cortical-transformation/blob/main/requirements.txt)
 
 ## 📋 Table of Contents
 
@@ -39,10 +34,7 @@ This project implements a comprehensive pipeline for neuroimaging data analysis 
 
 The pipeline consists of three main stages, each implemented in dedicated modules:
 
-<div align="center">
-  <img src="https://github.com/yourusername/cortical-transformation/raw/main/docs/images/pipeline_flow.png" alt="Pipeline Flow" width="650px">
-  <p><i>Replace with your actual flow diagram</i></p>
-</div>
+
 
 ### 1️⃣ Cortical Surface Resampling (`cortical_resample.py`)
 
@@ -162,8 +154,8 @@ mkdir -p src/cortical_transformation/data
 
 # Download spherical harmonic basis files (example - replace with actual commands)
 # Note: These files are not included in the repository
-wget -O src/cortical_transformation/data/Y_lh.npz https://example.com/harmonics/Y_lh.npz
-wget -O src/cortical_transformation/data/Y_rh.npz https://example.com/harmonics/Y_rh.npz
+# Contact the author for access to the harmonic basis files
+# Y_lh.npz and Y_rh.npz are necessary for the pipeline to function
 ```
 
 ## 🚀 Usage
@@ -221,44 +213,26 @@ np.savez(
 
 ```bash
 # Resample a subject's cortical surface
-python -m scripts.run_resample --subject sub-CC110033 --data_dir /path/to/subjects
+python cortical_resample.py --subject sub-CC110033 --data_dir /path/to/subjects
 
 # Reconstruct a subject's cortical surface
-python -m scripts.run_reconstruction --subject sub-CC110033 --data_dir /path/to/subjects --harmonic_dir /path/to/data
+python reconstruction.py --subject sub-CC110033 --data_dir /path/to/subjects --harmonic_dir /path/to/data
 
 # Run source estimation
-python -m scripts.run_source_estimation --subject sub-CC110033 --data_dir /path/to/subjects
+python source_estimation.py --subject sub-CC110033 --data_dir /path/to/subjects
 ```
 
 ## 📊 Example Results
 
+The pipeline provides comprehensive evaluation metrics for both surface reconstruction quality and source estimation accuracy. Results are generated for each subject and can be used to assess the quality of the processing at each stage.
+
 ### Surface Reconstruction Quality
 
-<div align="center">
-  <img src="https://github.com/yourusername/cortical-transformation/raw/main/docs/images/surface_reconstruction.png" alt="Surface Reconstruction" width="700px">
-  <p><i>Replace with your actual reconstruction visualization</i></p>
-</div>
-
-| Metric | Typical Value | Excellent | Acceptable | Poor |
-|--------|---------------|-----------|------------|------|
-| Mean Distance (mm) | 0.25 - 0.5 | < 0.25 | 0.25 - 1.0 | > 1.0 |
-| Max Distance (mm) | 1.0 - 2.0 | < 1.0 | 1.0 - 3.0 | > 3.0 |
-| Mean Normal Angle (°) | 5 - 10 | < 5 | 5 - 15 | > 15 |
-| % Angles > 45° | < 1% | < 0.5% | 0.5% - 2% | > 2% |
+Surface reconstruction quality is assessed using metrics including point-to-point distances, normal angles, and curvature differences between the original and reconstructed surfaces.
 
 ### Source Reconstruction
 
-<div align="center">
-  <img src="https://github.com/yourusername/cortical-transformation/raw/main/docs/images/source_reconstruction.png" alt="Source Reconstruction" width="700px">
-  <p><i>Replace with your actual source estimation visualization</i></p>
-</div>
-
-| Parameter | Description | Typical Value |
-|-----------|-------------|---------------|
-| gamma | Noise precision parameter | 1e-3 - 1e-2 |
-| beta | Source precision parameter | 1e-4 - 1e-3 |
-| ELBO | Evidence Lower Bound | Increases monotonically during optimization |
-| Convergence | Typical steps to convergence | 150 - 200 steps |
+Source reconstruction results include posterior estimates of key parameters (gamma, beta) and source activity maps that can be visualized on the cortical surface.
 
 ## 📐 Mathematical Framework
 
@@ -297,16 +271,12 @@ where:
 
 ### Spherical Harmonic Order Selection
 
-<div align="center">
+The level of detail in cortical reconstruction can be controlled by adjusting the `lmax` parameter:
 
-| Order (lmax) | Detail Level | Memory Usage | Suitable For |
-|--------------|--------------|--------------|--------------|
-| 10-15 | Low | Very Low | Global shape analysis |
-| 20-30 | Medium | Low | Standard analyses |
-| 40-60 | High | Moderate | Fine detail studies |
-| >60 | Very High | High | Specialized applications |
-
-</div>
+- **Low Order (lmax=10-15)**: Captures global shape but smooths out gyri and sulci
+- **Medium Order (lmax=20-30)**: Good balance between detail and noise suppression
+- **High Order (lmax=40-60)**: Captures fine details but may include noise
+- **Very High Order (lmax>60)**: Primarily for specialized applications requiring extreme detail
 
 ### GPU Acceleration
 
@@ -349,10 +319,10 @@ If you use this code in your research, please cite:
 
 ```bibtex
 @software{CorticalTransformation2025,
-  author = {Your Name},
+  author = {Bouainouche, Walid},
   title = {Cortical Transformation and Bayesian Source Reconstruction},
   year = {2025},
-  url = {https://github.com/yourusername/cortical-transformation}
+  url = {https://github.com/Waldoo78/cortical-transformation}
 }
 ```
 
@@ -362,10 +332,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👥 Contributors
 
-- Your Name (@yourusername) - Project Lead
+- Walid Bouainouche (@Waldoo78) - Project Lead
 
 ## 🙏 Acknowledgments
 
-- [Institution/Lab Name] for support
-- [Collaborator Names] for contributions to the theoretical framework
+- The Montreal Neurological Institute (The Neuro) at McGill University for support
 - The open-source neuroimaging community
