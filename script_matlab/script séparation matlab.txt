@@ -1,0 +1,16 @@
+main_dir = fullfile('C:', 'Users', 'wbou2', 'Desktop', 'meg_to_surface_ml', 'data', 'Anatomy_data_CAM_CAN');
+def split(main_dir, folder_dest)
+folders = dir(fullfile(main_dir, 'sub-*'));
+for i = 1:length(folders)
+current_folder = fullfile(main_dir, folders(i).name)
+#folder_dest=current_folder
+file_name = fullfile(current_folder, 'tess_cortex_pial_high.mat');
+VertConn = tess_vertconn(data.Vertices, data.Faces);
+[rH, lH] = tess_hemisplit(data);
+[lh_vertices, lh_faces] = tess_remove_vert(data.Vertices, data.Faces, rH, data.Atlas);
+[rh_vertices, rh_faces] = tess_remove_vert(data.Vertices, data.Faces, lH, data.Atlas);
+save(fullfile(folder_dest, 'lh_vertices.mat'), 'lh_vertices');
+save(fullfile(folder_dest, 'lh_faces.mat'), 'lh_faces');
+save(fullfile(folder_dest, 'rh_vertices.mat'), 'rh_vertices');
+save(fullfile(folder_dest, 'rh_faces.mat'), 'rh_faces');
+end

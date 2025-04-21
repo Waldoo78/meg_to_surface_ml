@@ -1,17 +1,21 @@
-# Scientific Computing
-numpy>=1.20.0
-scipy>=1.7.0
-jax>=0.4.1
+# Core Scientific Libraries
+numpy>=1.20.0        # Fundamental array operations and numerical computing
+scipy>=1.7.0         # Scientific algorithms and advanced functions
+jax>=0.4.1           # Accelerated numerical computing with GPU support
 
-# 3D Visualization and Processing
-pyvista>=0.34.0
-vtk>=9.1.0
+# Data Structures and Processing
+sparse>=0.13.0       # Efficient sparse array operations
+pandas>=1.3.0        # Data manipulation and analysis
+scikit-learn>=1.0.0  # Machine learning utilities
 
-# Neuroimaging
-mne>=1.0.0
+# Visualization and 3D Processing
+matplotlib>=3.5.0    # 2D plotting and visualization
+pyvista>=0.34.0      # 3D mesh visualization and analysis
+vtk>=9.1.0           # Visualization toolkit (backend for PyVista)
 
-# File Management
-pickle-mixin>=1.0.2
+# File and Data Handling
+pickle-mixin>=1.0.2  # Enhanced serialization capabilities
+nibabel>=3.2.0       # Neuroimaging file format support
 
-# Data Processing
-sparse>=0.13.0
+# MEG/EEG Analysis
+mne>=1.0.0           # MEG/EEG data processing and visualization

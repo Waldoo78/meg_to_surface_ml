@@ -7,6 +7,8 @@ from utils.file_manip.Matlab_to_array import load_faces, load_vertices
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
+
+# S3MAP preprocess 
 def get_spherical_projection(mesh_data, hemisphere='lh'):
     """Projects a mesh onto a sphere at 40962 vertices using S3MAP.
     
@@ -121,7 +123,6 @@ def merge_hemis(hemi_lh, hemi_rh):
     return merged_coords, merged_tris
 
 
-
 def process_cortical_surfaces(input_folder, output_folder, n_subjects=None):
     """
     Process cortical surfaces from input folder and save resampled versions in output folder
@@ -232,17 +233,132 @@ def process_cortical_surfaces(input_folder, output_folder, n_subjects=None):
     print(f"\nProcessing complete. {processed_count} subjects processed.")
 
 
-if __name__=="__main__":
+import os
+import numpy as np
+import pyvista as pv
+from utils.file_manip import vtk_processing
+from utils.file_manip.Matlab_to_array import load_faces, load_vertices
+
+def check_negative_triangles(coords, triangles):
+    """Checks the number of triangles with negative areas"""
+    mesh = pv.PolyData(coords, vtk_processing.convert_triangles_to_pyvista(triangles))
+    mesh.compute_normals(cell_normals=True, point_normals=True, inplace=True)
+    # Compute triangle areas
+    areas = mesh.compute_cell_sizes().cell_data['Area']
+    negative_count = np.sum(areas < 0)
+    total_count = len(areas)
+    print(f"Triangles with negative areas: {negative_count}/{total_count} ({negative_count/total_count*100:.2f}%)")
+    return negative_count, total_count
+
+def compare_surfaces(original_vertices_file, original_faces_file, resampled_npz_file):
+    """
+    Compare the original surface with its resampled version.
+    
+    Args:
+        original_vertices_file: Path to the original vertices file
+        original_faces_file: Path to the original faces file
+        resampled_npz_file: Path to the resampled surface npz file
+    """
+    # Load the original surface
+    original_vertices = load_vertices(original_vertices_file)
+    original_faces = load_faces(original_faces_file)
+    
+    # Load the resampled surface 
+    resampled_data = np.load(resampled_npz_file)
+    resampled_vertices = resampled_data['coords'] + resampled_data['center']
+    resampled_faces = resampled_data['tris']
+    
+    # Basic stats
+    print("=== Surface Statistics ===")
+    print(f"Original surface: {len(original_vertices)} vertices, {len(original_faces)} triangles")
+    print(f"Resampled surface: {len(resampled_vertices)} vertices, {len(resampled_faces)} triangles")
+    
+    # Check triangles with negative areas 
+    print("\n=== Checking triangles with negative areas ===")
+    print("Original surface:")
+    check_negative_triangles(original_vertices, original_faces)
+    print("Resampled surface:")
+    check_negative_triangles(resampled_vertices, resampled_faces)
+    
+    # Compute normals and check their orientation
+    print("\n=== Checking normal orientation ===")
+    def check_normals_orientation(vertices, faces, label):
+        mesh = pv.PolyData(vertices, vtk_processing.convert_triangles_to_pyvista(faces))
+        mesh.compute_normals(cell_normals=True, point_normals=False, inplace=True)
+        normals = mesh.cell_data['Normals']
+        
+        # Estimate approximate center (can be improved for a brain)
+        center = np.mean(vertices, axis=0)
+        
+        # For each triangle, check if its normal points outward
+        cell_centers = mesh.cell_centers().points
+        vectors_to_center = cell_centers - center  # From brain center to triangle center
+        
+        # Calculate dot products
+        # A positive dot product indicates vectors pointing in roughly the same direction
+        dot_products = np.sum(vectors_to_center * normals, axis=1)
+        
+        outward_count = np.sum(dot_products > 0)
+        inward_count = np.sum(dot_products < 0)
+        total_count = len(dot_products)
+        
+        print(f"{label}:")
+        print(f"  Outward normals: {outward_count}/{total_count} ({outward_count/total_count*100:.2f}%)")
+        print(f"  Inward normals: {inward_count}/{total_count} ({inward_count/total_count*100:.2f}%)")
+        
+        return outward_count, inward_count, total_count
+    
+    check_normals_orientation(original_vertices, original_faces, "Original surface")
+    check_normals_orientation(resampled_vertices, resampled_faces, "Resampled surface")
+    
+    # Visualization
+    print("\n=== Visualization setup ===")
+    print("You can visually compare both surfaces in an interactive window.")
+    print("Original surface in white, resampled surface in red.")
+    
+    orig_mesh = pv.PolyData(original_vertices, vtk_processing.convert_triangles_to_pyvista(original_faces))
+    resampled_mesh = pv.PolyData(resampled_vertices, vtk_processing.convert_triangles_to_pyvista(resampled_faces))
+    
+    p = pv.Plotter()
+    p.add_mesh(orig_mesh, color='white', label='Original', opacity=0.7)
+    p.add_mesh(resampled_mesh, color='red', label='Resampled', opacity=0.7)
+    p.add_legend()
+    p.show()
+    
+# Usage example
+if __name__ == "__main__":
     from utils.file_manip.vtk_processing import convert_triangles_to_pyvista
-    import pyvista as pv 
-    folder_path = r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN\sub-CC110033"
+    import pyvista as pv
+    
+    folder_path = r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN\sub-CC720071"
     left_vertices_file = os.path.join(folder_path, "lh_vertices")
     left_faces_file = os.path.join(folder_path, "lh_faces")
     output_file = os.path.join(folder_path, "lh_resampled.npz")
+    
+    # Load original data
     left_faces = load_faces(left_faces_file)
     left_vertices = load_vertices(left_vertices_file)
-    coords, tris=get_resampled_inner_surface((left_vertices, left_faces), hemisphere='lh')
-    mesh=pv.PolyData(coords, convert_triangles_to_pyvista(tris))
-    p=pv.Plotter()
+    
+    # Get resampled surface
+    coords, tris = get_resampled_inner_surface((left_vertices, left_faces), hemisphere='lh')
+    
+    # Check triangles with negative areas
+    print("\n=== Checking triangles with negative areas on resampled surface ===")
+    check_negative_triangles(coords, tris)
+    
+    # Save results in NPZ format
+    center = np.mean(coords, axis=0)
+    coords_centered = coords - center
+    np.savez(output_file, coords=coords_centered, tris=tris, center=center)
+    print(f"Resampled surface saved to {output_file}")
+    
+    # Visualize result
+    mesh = pv.PolyData(coords, convert_triangles_to_pyvista(tris))
+    p = pv.Plotter()
     p.add_mesh(mesh, show_edges=True)
     p.show()
+    
+    # If NPZ file already exists, do a complete comparison
+    if os.path.exists(output_file):
+        print("\n=== Comparison with original surface ===")
+        compare_surfaces(left_vertices_file, left_faces_file, output_file)

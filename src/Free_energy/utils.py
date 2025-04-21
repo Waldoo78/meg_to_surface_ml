@@ -183,84 +183,114 @@ def compute_leadfield(meg_channel_path, lh_vertices, lh_faces, rh_vertices, rh_f
         )
     ])
     
-    # Compute forward solution
+    # Compute forward solution with constrained orientations directly
     sphere = mne.make_sphere_model(head_radius="auto", info=info)
-    fwd_free = mne.make_forward_solution(
+    fwd = mne.make_forward_solution(
         info=info,
         src=src,
         bem=sphere,
         trans=None,
         meg=True,
-        eeg=False
+        eeg=False,
+        fixed=True,  # Constrain dipole orientations to surface normal
+        surf_ori=True  # Use surface orientation
     )
     
-    fwd_fixed = mne.convert_forward_solution(
-        fwd_free,
-        surf_ori=True,
-        force_fixed=True
-    )
-    
-    leadfield = fwd_fixed['sol']['data']
+    leadfield = fwd['sol']['data']
     print(f"Leadfield shape: {leadfield.shape}")
     
-    return leadfield, fwd_fixed,transform_matrix
+    return leadfield, fwd, transform_matrix
 
 
 import numpy as np
 from scipy import linalg, signal
 
-def temporal_reduction(Y, sfreq=600, freq_range=(8, 30), variance_explained=0.9, bin_size=3000):
-    n_channels, n_times = Y.shape
-    n_bins = n_times // bin_size
-    if n_times % bin_size:
-        print(f"⚠️ Ignoring {n_times - n_bins * bin_size} samples.")
-
-    # Fenêtre Hanning et calcul de la covariance moyenne sur chaque bin
-    w = signal.windows.hann(bin_size, sym=False)
-    W_tilde = np.zeros((bin_size, bin_size), dtype=np.float64)
-    for i in range(n_bins):
-        Y_bin = Y[:, i * bin_size:(i + 1) * bin_size]
-        Y_bin_windowed = Y_bin * w
-        W_tilde += Y_bin_windowed.T @ Y_bin_windowed
-    W_tilde /= n_bins
-
-    # Calcul des indices pour la DCT dans la bande freq_range
-    k_min = int(np.ceil(freq_range[0] * 2 * bin_size / sfreq))
-    k_max = int(np.floor(freq_range[1] * 2 * bin_size / sfreq))
+def temporal_reduction(Y_extract, sfreq=1000, freq_range=(8, 30), variance_explained=0.9):
+    """
+    Temporal reduction of a MEG/EEG signal extract
+    
+    Parameters:
+    Y_extract : Multi-channel signal (n_channels, n_times) - a specific extract of the signal
+    sfreq : Sampling frequency (Hz)
+    freq_range : Frequency range to preserve (Hz)
+    variance_explained : Percentage of variance to preserve
+    
+    Returns:
+    Y_reduced : Signal after temporal reduction
+    P : Projection matrix
+    var_cum : Cumulative explained variance
+    n_modes : Number of modes used
+    """
+    n_channels, n_times = Y_extract.shape
+    
+    # Apply Hanning window
+    w = signal.windows.hann(n_times, sym=False)
+    Y_windowed = Y_extract * w
+    
+    # Compute covariance matrix
+    W_tilde = Y_windowed.T @ Y_windowed
+    
+    # Calculate indices for DCT in the frequency range
+    k_min = int(np.ceil(freq_range[0] * 2 * n_times / sfreq))
+    k_max = int(np.floor(freq_range[1] * 2 * n_times / sfreq))
     k_min = max(0, k_min)
-    k_max = min(bin_size - 1, k_max)
+    k_max = min(n_times - 1, k_max)
     if k_min > k_max:
         raise ValueError("Frequency range too narrow.")
     k = np.arange(k_min, k_max + 1)
-
-    # Construction de la base DCT restreinte
-    t = np.arange(bin_size)[:, None]
-    K = np.sqrt(2.0 / bin_size) * np.cos(np.pi * k * (2 * t + 1) / (2 * bin_size))
-
-    # Projection de la covariance dans l'espace DCT et décomposition en valeurs propres
+    
+    # Construct restricted DCT basis
+    t = np.arange(n_times)[:, None]
+    K = np.sqrt(2.0 / n_times) * np.cos(np.pi * k * (2 * t + 1) / (2 * n_times))
+    
+    # Project covariance into DCT space and eigendecomposition
     K_tilde = K.T @ W_tilde @ K
     S, U = linalg.eigh(K_tilde)
     idx = np.argsort(S)[::-1]
     S = S[idx]
     U = U[:, idx]
-
-    # Sélection des modes pour atteindre variance_explained
+    
+    # Select modes to achieve variance_explained
     var_cum = np.cumsum(S) / np.sum(S)
     n_modes = np.searchsorted(var_cum, variance_explained) + 1
     U = U[:, :n_modes]
-
-    # Construction de la matrice de projection P (taille: bin_size x n_modes)
+    
+    # Construct projection matrix P (size: n_times x n_modes)
     PW = w[:, None] * K
     P = PW @ U
     P /= np.linalg.norm(P, axis=0, keepdims=True)
-
-    # Projection des données bin par bin
-    Y_reduced_list = []
-    for i in range(n_bins):
-        Y_bin = Y[:, i * bin_size:(i + 1) * bin_size]
-        Y_bin_windowed = Y_bin * w
-        Y_bin_reduced = Y_bin_windowed @ P
-        Y_reduced_list.append(Y_bin_reduced)
-    Y_reduced = np.concatenate(Y_reduced_list, axis=1)
-
+    
+    # Project the data
+    Y_reduced = Y_windowed @ P
+    
     return Y_reduced, P, var_cum[:n_modes], n_modes
+
+def check_covariance_properties(Qe):
+    """Check and display key properties of a covariance matrix."""
+    # Calculate all properties
+    is_symmetric = np.allclose(Qe, Qe.T)
+    eigenvals = np.linalg.eigvals(Qe)
+    is_positive_definite = np.all(eigenvals > 0)
+    has_positive_diagonal = np.all(np.diag(Qe) > 0)
+    cond = np.linalg.cond(Qe)
+    rank = np.linalg.matrix_rank(Qe)
+    
+    # Display results in a formatted way
+    print(f"Matrix properties ({Qe.shape[0]}×{Qe.shape[1]}):")
+    print(f"- Symmetric: {is_symmetric}")
+    print(f"- Positive definite: {is_positive_definite}")
+    print(f"- Positive diagonal: {has_positive_diagonal}")
+    print(f"- Rank: {rank}/{Qe.shape[0]}")
+    print(f"- Condition number: {cond:.2e}")
+
+
+def regularize_covariance(Qe, percentile=50):
+    """Regularize a covariance matrix using eigenvalue thresholding."""
+    # Diagonalize and threshold
+    eigenvals, eigenvecs = np.linalg.eigh(Qe)
+    threshold = np.percentile(eigenvals, percentile)
+    eigenvals_reg = np.maximum(eigenvals, threshold)
+    
+    # Reconstruct matrix ensuring symmetry
+    Qe_reg = eigenvecs @ np.diag(eigenvals_reg) @ eigenvecs.T
+    return (Qe_reg + Qe_reg.T) / 2

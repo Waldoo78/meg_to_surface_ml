@@ -1,10 +1,8 @@
 import numpy as np
 import os
 import pickle
-from utils.cortical import spherical_harmonics as SH
 from src.cortical_transformation.reconstruction import reconstruct_brain
 from utils.file_manip.vtk_processing import convert_triangles_to_pyvista
-
 
 def reduce_mesh_using_matlab(vertices, faces, target_vertices):
     try:
@@ -36,40 +34,59 @@ def reduce_mesh_using_matlab(vertices, faces, target_vertices):
             eng.quit()
         raise RuntimeError(f"Error in reducepatch: {str(e)}")
 
-def generate_and_save_surfaces(main_folder, Y_lh_full, Y_rh_full, coeffs_diff_lh, 
-                            coeffs_diff_rh, lh_center, rh_center, lmax, sigma, 
-                            fsaverage_path, merge):
-    # Load fsaverage template data
-    with open(os.path.join(fsaverage_path, "coeffs_lh.pkl"), 'rb') as f:
-        coeffs_fsav_lh_full = pickle.load(f)['organized_coeffs']
-    fsav_data_lh = np.load(os.path.join(fsaverage_path, "lh_resampled.npz"))
+def generate_and_save_surfaces(Y_lh_full, Y_rh_full, lmax, data_path, merge=True,
+                               subject_folder=None, coeffs_lh=None, coeffs_rh=None, 
+                               lh_center=None, rh_center=None):
+    """
+    Generate and save brain surfaces using spherical harmonics
+    
+    Parameters:
+    -----------
+    Y_lh_full, Y_rh_full : numpy arrays
+        Spherical harmonics for left and right hemispheres
+    lmax : int
+        Maximum degree of spherical harmonics to use
+    data_path : str
+        Path to data directory containing triangle information
+    merge : bool
+        Whether to merge left and right hemispheres
+    subject_folder : str or None
+        Path to subject folder, needed if coeffs or centers not provided
+    coeffs_lh, coeffs_rh : dict or None
+        Coefficients for left and right hemispheres, loaded from subject_folder if None
+    lh_center, rh_center : numpy arrays or None
+        Centers for left and right hemispheres, loaded from subject_folder if None
+    """
+    # Load data if not provided
+    if coeffs_lh is None or coeffs_rh is None:
+        if subject_folder is None:
+            raise ValueError("Either coeffs_lh/coeffs_rh or subject_folder must be provided")
+        
+        # Load subject coefficients
+        with open(os.path.join(subject_folder, "coeffs_lh.pkl"), 'rb') as f:
+            coeffs_lh_data = pickle.load(f)
+        
+        with open(os.path.join(subject_folder, "coeffs_rh.pkl"), 'rb') as f:
+            coeffs_rh_data = pickle.load(f)
+        
+        # Use the full coefficients dictionaries
+        coeffs_lh = coeffs_lh_data
+        coeffs_rh = coeffs_rh_data
+    
+    if lh_center is None or rh_center is None:
+        if subject_folder is None:
+            raise ValueError("Either lh_center/rh_center or subject_folder must be provided")
+        
+        # Load centers
+        lh_center = np.load(os.path.join(subject_folder, "lh_center.npz"))['center']
+        rh_center = np.load(os.path.join(subject_folder, "rh_center.npz"))['center']
+    
+    # Load triangles for reconstruction
+    fsav_data_lh = np.load(os.path.join(data_path, "lh_resampled.npz"))
     tris = fsav_data_lh['tris']
-    
-    with open(os.path.join(fsaverage_path, "coeffs_rh.pkl"), 'rb') as f:
-        coeffs_fsav_rh_full = pickle.load(f)['organized_coeffs']
-
-    # Truncate fsaverage coefficients to lmax
-    coeffs_fsav_lh = {l: coeffs_fsav_lh_full[l] for l in range(lmax + 1)}
-    coeffs_fsav_rh = {l: coeffs_fsav_rh_full[l] for l in range(lmax + 1)}
-                
-    # Sum coefficients 
-    coeffs_sum_lh = {
-        0: coeffs_fsav_lh[0], 
-        **{l: coeffs_fsav_lh[l] + coeffs_diff_lh['organized_coeffs'][l] 
-           for l in range(1, lmax + 1)}
-    }
-    
-    coeffs_sum_rh = {
-        0: coeffs_fsav_rh[0],
-        **{l: coeffs_fsav_rh[l] + coeffs_diff_rh['organized_coeffs'][l] 
-           for l in range(1, lmax + 1)}
-    }
-
-    coeffs_lh = {'organized_coeffs': coeffs_sum_lh}
-    coeffs_rh = {'organized_coeffs': coeffs_sum_rh}
 
     # Get reconstructed surfaces
-    if merge==True:
+    if merge:
         reconstructed_coords, reconstructed_tris = reconstruct_brain(
             lh_center=lh_center,
             rh_center=rh_center,
@@ -118,46 +135,68 @@ def generate_and_save_surfaces(main_folder, Y_lh_full, Y_rh_full, coeffs_diff_lh
         return (lh_verts_reduced, lh_faces_reduced), (rh_verts_reduced, rh_faces_reduced)
 
 if __name__=="__main__":
-    import time 
     import pyvista as pv
-    main_folder = r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN"
-    data_path=r"C:\Users\wbou2\Desktop\meg_to_surface_ml\src\cortical_transformation\data"
-    fsaverage_path=r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\fsaverage"
+    import copy
+    
+    # Define paths
+    PATHS = {
+        'main': r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN",
+        'fsaverage': r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\fsaverage",
+        'harmonics': r"C:\Users\wbou2\Desktop\meg_to_surface_ml\src\cortical_transformation\data"
+    }
+    
+    sub_name = "sub-CC110033"
+    PATHS['subject'] = os.path.join(PATHS['main'], sub_name)
 
-    # Load hemisphere-specific harmonics and slice according to lmax (limited to lmax<=80)
-    Y_lh_full = np.load(os.path.join(data_path, "Y_lh.npz"))['Y']
-    Y_rh_full = np.load(os.path.join(data_path, "Y_rh.npz"))['Y']
+    # Load hemisphere-specific harmonics
+    Y_lh_full = np.load(os.path.join(PATHS['harmonics'], "Y_lh.npz"))['Y']
+    Y_rh_full = np.load(os.path.join(PATHS['harmonics'], "Y_rh.npz"))['Y']
 
-    sub_name="sub-CC110033"
-    subject_folder=os.path.join(main_folder, sub_name)
-
-    # Load coefficient differences
-    with open(os.path.join(subject_folder, "coeffs_diff_lh.pkl"), 'rb') as f:
-        coeffs_diff_lh = pickle.load(f)
-    with open(os.path.join(subject_folder, "coeffs_diff_rh.pkl"), 'rb') as f:
-        coeffs_diff_rh = pickle.load(f)
-
-    # Load centers
-    lh_center = np.load(os.path.join(subject_folder, "lh_center.npz"))['center']
-    rh_center = np.load(os.path.join(subject_folder, "rh_center.npz"))['center']
-
-    start_time = time.time()
-    reconstructed_coords, reconstructed_tris = generate_and_save_surfaces(
-        main_folder=main_folder,
+    # Example 1: Using subject_folder to load coefficients internally
+    merged_result = generate_and_save_surfaces(
         Y_lh_full=Y_lh_full,
         Y_rh_full=Y_rh_full,
-        coeffs_diff_lh=coeffs_diff_lh,
-        coeffs_diff_rh=coeffs_diff_rh,
+        lmax=30,
+        data_path=PATHS['fsaverage'],
+        subject_folder=PATHS['subject'],
+        merge=True
+    )
+    
+    # Example 2: Pre-loading coefficients and passing them explicitly
+    # Load coefficients
+    with open(os.path.join(PATHS['subject'], "coeffs_lh.pkl"), 'rb') as f:
+        coeffs_lh = pickle.load(f)
+    with open(os.path.join(PATHS['subject'], "coeffs_rh.pkl"), 'rb') as f:
+        coeffs_rh = pickle.load(f)
+    
+    # Load centers
+    lh_center = np.load(os.path.join(PATHS['subject'], "lh_center.npz"))['center']
+    rh_center = np.load(os.path.join(PATHS['subject'], "rh_center.npz"))['center']
+    
+    # Optional: apply epsilon modification to coefficients
+    epsilon = 0.01
+    coeffs_lh_eps = copy.deepcopy(coeffs_lh)
+    coeffs_rh_eps = copy.deepcopy(coeffs_rh)
+    for l in [16, 17]:
+        for m in range(2*l+1):
+            coeffs_lh_eps["organized_coeffs"][l][m] += np.array([epsilon+1j*epsilon, epsilon+1j*epsilon, epsilon+1j*epsilon])
+            coeffs_rh_eps["organized_coeffs"][l][m] += np.array([epsilon+1j*epsilon, epsilon+1j*epsilon, epsilon+1j*epsilon])
+    
+    # Get separate hemispheres with pre-loaded data
+    hemispheres = generate_and_save_surfaces(
+        Y_lh_full=Y_lh_full,
+        Y_rh_full=Y_rh_full,
+        lmax=40,
+        data_path=PATHS['fsaverage'],
+        coeffs_lh=coeffs_lh_eps,
+        coeffs_rh=coeffs_rh_eps,
         lh_center=lh_center,
         rh_center=rh_center,
-        lmax=30,
-        sigma=1e-4,
-        fsaverage_path=fsaverage_path
+        merge=False
     )
-    execution_time = time.time() - start_time
-    print(f"Temps d'exécution de generate_and_save_surfaces : {execution_time:.2f} secondes")
-
-    # Visualisation
+    
+    # Visualization of the merged result
+    reconstructed_coords, reconstructed_tris = merged_result
     mesh = pv.PolyData(reconstructed_coords, convert_triangles_to_pyvista(reconstructed_tris))
     p = pv.Plotter()
     p.add_mesh(mesh, show_edges=True, color='white')
