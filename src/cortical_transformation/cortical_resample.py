@@ -3,7 +3,6 @@ import os
 import pyvista as pv
 from utils.file_manip.Matlab_to_array import load_faces, load_vertices
 from utils.cortical import surface_preprocess as sp
-from utils.file_manip.vtk_processing import convert_triangles_to_pyvista
 
 def preprocess_surface(vertices, faces, iterations=50, relaxation=0.1):
     """
@@ -168,45 +167,22 @@ def process_surfaces(main_folder, subject_id=None, save_results=True, preprocess
         return results[subject_id]
     return results
 
-def visualize_surface(subject_data=None, subject_folder=None, hemisphere='lh', show_preprocessed=False):
-    """
-    Visualize original and resampled surface for a subject and hemisphere
-    
-    Args:
-        subject_data: Dictionary with processed data (optional)
-        subject_folder: Path to subject folder (used if subject_data is None)
-        hemisphere: Hemisphere to visualize ('lh' or 'rh')
-        show_preprocessed: Whether to show preprocessed rather than original surfaces
-    """
-    # Code logic to load and visualize surfaces is kept similar
-    # but simplified by removing redundant checks and comments
-    
-    # Create visualization with two panels comparing original/preprocessed
-    # and resampled surfaces
-    pass  # Implementation follows the original but with simplified logic
-
-def main():
+def main(main_folder=None, subject_id=None, save_results=True, preprocess=True):
     """Main function to configure and run the processing pipeline"""
-    # Configuration
-    main_folder = r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN"  # Update this path
-    
-    # Processing options
-    process_all_subjects = True     # Process all subjects
-    specific_subject = "sub-CC110033"  # Used if process_all_subjects=False
-    save_results = True             # Save processed results
-    preprocess_surfaces = True      # Apply PyVista preprocessing
-    visualize_results = False       # Visualize surfaces
-
+        
     # Run processing
-    if process_all_subjects:
-        results = process_surfaces(main_folder, save_results=save_results, 
-                                  preprocess=preprocess_surfaces)
-    else:
-        results = process_surfaces(main_folder, subject_id=specific_subject,
-                                  save_results=save_results, 
-                                  preprocess=preprocess_surfaces)
+    results = process_surfaces(main_folder, subject_id=subject_id, 
+                              save_results=save_results, preprocess=preprocess)
     
     print("Processing complete!")
+    return results
 
 if __name__ == "__main__":
-    main()
+    import sys
+    # Get command line arguments
+    # Usage: python cortical_resample.py <main_folder> <subject_id>
+    
+    main_folder = sys.argv[1] if len(sys.argv) > 1 else None
+    subject_id = sys.argv[2] if len(sys.argv) > 2 else None
+    
+    main(main_folder=main_folder, subject_id=subject_id)

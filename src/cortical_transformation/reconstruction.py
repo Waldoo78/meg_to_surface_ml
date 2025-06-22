@@ -4,6 +4,9 @@ import os
 import scipy.io as sio
 import pickle
 from pathlib import Path
+import sys 
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from utils.file_manip.Matlab_to_array import load_faces, load_vertices
 from utils.mathutils import compute_vertex_normals, build_template_adjacency_two_hemis, compute_mean_curvature
@@ -350,7 +353,7 @@ def process_subjects(base_dir, data_path, subject_id=None, output_dir=None, sigm
     print("\nProcessing completed!")
     
     # Return the result of the specific subject if a subject_id was provided
-    if len(subject_dirs) == 1 and os.path.basename(subject_dirs[0]) == os.path.basename(subject_id or ''):
+    if len(subject_dirs) == 1 and subject_id:
         return results.get(os.path.basename(subject_dirs[0]))
     
     return results
@@ -483,50 +486,57 @@ def reconstruct_brain(lh_center=None, rh_center=None, coeffs_lh=None, coeffs_rh=
         return merged_results
 
 
+def main(base_dir=None, data_path=None, subject_id=None, sigma=1e-4, lmax=30, 
+         lambda_reg=0, max_order_coeff=80, visualize_results=False, save_reconstructed_surface=False):
+    """Main function with configurable parameters"""
+    
+    # Default paths
+    if base_dir is None:
+        base_dir = r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN"
+    if data_path is None:
+        data_path = r"C:\Users\wbou2\Desktop\meg_to_surface_ml\src\cortical_transformation\data"
+    
+    # Run processing
+    results = process_subjects(
+        base_dir=base_dir,
+        data_path=data_path,
+        subject_id=subject_id,
+        sigma=sigma,
+        lmax=lmax,
+        lambda_reg=lambda_reg,
+        max_order_coeff=max_order_coeff,
+        visualize_first=visualize_results,
+        save_surface=save_reconstructed_surface
+    )
+    
+    print("Processing complete!")
+    return results
+
+
 if __name__ == "__main__":
-    # Path configuration
-    base_data_path = r"C:\Users\wbou2\Desktop\meg_to_surface_ml\src\cortical_transformation"
-    data_path = os.path.join(base_data_path, "data")
-    subjects_dir = r"C:\Users\wbou2\Desktop\meg_to_surface_ml\data\Anatomy_data_CAM_CAN"
+    import argparse
     
-    # Parameters
-    sigma = 1e-4
-    lmax = 30  # Maximum degree for surface reconstruction
-    max_order_coeff = 80  # Maximum degree for coefficient storage
-    lambda_reg = 0
+    parser = argparse.ArgumentParser(description='Process cortical surfaces with spherical harmonics')
+    parser.add_argument('--base_dir', required=True, help='Directory containing subject folders')
+    parser.add_argument('--data_path', required=True, help='Path to template and harmonics data')
+    parser.add_argument('--subject', help='Specific subject ID to process (optional)')
+    parser.add_argument('--lmax', type=int, default=30, help='Maximum degree for reconstruction')
+    parser.add_argument('--max_order_coeff', type=int, default=80, help='Maximum degree for coefficient storage')
+    parser.add_argument('--sigma', type=float, default=1e-4, help='Smoothing parameter')
+    parser.add_argument('--lambda_reg', type=float, default=0, help='Regularization parameter')
+    parser.add_argument('--visualize', action='store_true', help='Visualize results for first subject')
+    parser.add_argument('--save_surface', action='store_true', help='Save reconstructed surface')
     
-    # Processing options
-    process_all_subjects = True     # Process all subjects
-    specific_subject = "sub-CC110033"  # Specific subject (used if process_all_subjects=False)
-    visualize_results = False        # Visualize results
-    save_reconstructed_surface = False  # Save reconstructed surface
+    args = parser.parse_args()
     
-    if process_all_subjects:
-        print("Processing all subjects...")
-        results = process_subjects(
-            base_dir=subjects_dir,
-            data_path=data_path,
-            sigma=sigma,
-            lmax=lmax,
-            lambda_reg=lambda_reg,
-            max_order_coeff=max_order_coeff,
-            visualize_first=visualize_results,
-            save_surface=save_reconstructed_surface
-        )
-    else:
-        print(f"Processing specific subject: {specific_subject}")
-        subject_result = process_subjects(
-            base_dir=subjects_dir,
-            data_path=data_path,
-            subject_id=specific_subject,
-            sigma=sigma,
-            lmax=lmax,
-            lambda_reg=lambda_reg,
-            max_order_coeff=max_order_coeff,
-            visualize_first=visualize_results,
-            save_surface=save_reconstructed_surface
-        )
-        
-        # We can do other specific processing on the result of a single subject if needed
-        if subject_result:
-            print(f"Successful processing of subject {specific_subject}")
+    main(
+        base_dir=args.base_dir,
+        data_path=args.data_path,
+        subject_id=args.subject,
+        sigma=args.sigma,
+        lmax=args.lmax,
+        lambda_reg=args.lambda_reg,
+        max_order_coeff=args.max_order_coeff,
+        visualize_results=args.visualize,
+        save_reconstructed_surface=args.save_surface
+    )
