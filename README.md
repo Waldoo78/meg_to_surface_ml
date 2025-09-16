@@ -1,11 +1,5 @@
-# Cortical Transformation & Bayesian Source Reconstruction
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![JAX](https://img.shields.io/badge/JAX-enabled-green.svg)](https://github.com/google/jax)
-[![Dependencies](https://img.shields.io/badge/dependencies-up%20to%20date-brightgreen.svg)](https://github.com/Waldoo78/cortical-transformation/blob/main/requirements.txt)
-
-## 📋 Table of Contents
+## Table of Contents
 
 - [Overview](#-overview)
 - [Pipeline Components](#-pipeline-components)
@@ -18,7 +12,7 @@
 - [Citation](#-citation)
 - [License](#-license)
 
-## 🔍 Overview
+## Overview
 
 This project implements a comprehensive pipeline for neuroimaging data analysis that combines cortical surface processing with Bayesian source reconstruction. The approach allows for efficient analysis of brain structure and function by standardizing cortical representation while maintaining anatomical validity.
 
@@ -30,7 +24,7 @@ This project implements a comprehensive pipeline for neuroimaging data analysis 
 - **Cross-Subject Analysis Support**: Facilitates group-level comparisons via standardized representations
 - **Quality Assessment Tools**: Quantifies reconstruction accuracy and source estimation reliability
 
-## 🔄 Pipeline Components
+## Pipeline Components
 
 The pipeline consists of three main stages, each implemented in dedicated modules:
 
@@ -116,7 +110,7 @@ results = run_inference_qe(
 J = results["J"]  # Source activity estimates
 ```
 
-## 📥 Installation
+## Installation
 
 ### Prerequisites
 
@@ -158,7 +152,7 @@ mkdir -p src/cortical_transformation/data
 # Y_lh.npz and Y_rh.npz are necessary for the pipeline to function
 ```
 
-## 🚀 Usage
+## Usage
 
 ### Complete Pipeline Example
 
@@ -301,7 +295,7 @@ For large datasets, consider:
 - Reducing SVD components for source estimation (n_components=10-15)
 - Using a lower harmonic order for initial tests
 
-## 📦 Dependencies
+## Dependencies
 
 Primary dependencies:
 
@@ -313,22 +307,8 @@ Primary dependencies:
 
 For a complete list, see `requirements.txt`.
 
-## 📝 Citation
 
-If you use this code in your research, please cite:
 
-```bibtex
-@software{CorticalTransformation2025,
-  author = {Bouainouche, Walid},
-  title = {Cortical Transformation and Bayesian Source Reconstruction},
-  year = {2025},
-  url = {https://github.com/Waldoo78/cortical-transformation}
-}
-```
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 👥 Contributors
 
