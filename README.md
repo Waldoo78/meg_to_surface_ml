@@ -216,7 +216,7 @@ python reconstruction.py --subject sub-CC110033 --data_dir /path/to/subjects --h
 python source_estimation.py --subject sub-CC110033 --data_dir /path/to/subjects
 ```
 
-## 📊 Example Results
+##  Example Results
 
 The pipeline provides comprehensive evaluation metrics for both surface reconstruction quality and source estimation accuracy. Results are generated for each subject and can be used to assess the quality of the processing at each stage.
 
@@ -310,7 +310,7 @@ For a complete list, see `requirements.txt`.
 
 
 
-## 👥 Contributors
+## Contributors
 
 - Walid Bouainouche (@Waldoo78) - Project Lead
 
