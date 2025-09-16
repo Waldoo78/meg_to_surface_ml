@@ -228,7 +228,7 @@ Surface reconstruction quality is assessed using metrics including point-to-poin
 
 Source reconstruction results include posterior estimates of key parameters (gamma, beta) and source activity maps that can be visualized on the cortical surface.
 
-## 📐 Mathematical Framework
+## Mathematical Framework
 
 ### Spherical Harmonic Representation
 
@@ -261,7 +261,7 @@ where:
 - $q(\theta)$ is the variational posterior
 - $p(\theta, \mathbf{Y})$ is the joint distribution
 
-## ⚙️ Performance Tuning
+## Performance Tuning
 
 ### Spherical Harmonic Order Selection
 
@@ -314,7 +314,7 @@ For a complete list, see `requirements.txt`.
 
 - Walid Bouainouche (@Waldoo78) - Project Lead
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - The Montreal Neurological Institute (The Neuro) at McGill University for support
 - The open-source neuroimaging community
