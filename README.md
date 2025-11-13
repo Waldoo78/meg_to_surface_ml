@@ -272,20 +272,6 @@ The level of detail in cortical reconstruction can be controlled by adjusting th
 - **High Order (lmax=40-60)**: Captures fine details but may include noise
 - **Very High Order (lmax>60)**: Primarily for specialized applications requiring extreme detail
 
-### GPU Acceleration
-
-The Bayesian inference component uses JAX, which automatically utilizes GPU when available. To enable GPU acceleration:
-
-```python
-# Before importing JAX or NumPyro:
-os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
-os.environ['XLA_PYTHON_CLIENT_ALLOCATOR'] = 'platform'
-
-# Then import JAX packages
-import jax
-import jax.numpy as jnp
-import numpyro
-```
 
 ### Memory Optimization
 
@@ -300,7 +286,6 @@ For large datasets, consider:
 Primary dependencies:
 
 - **NumPy/SciPy**: Core numerical operations
-- **JAX/JAX NumPy**: GPU-accelerated array processing and automatic differentiation
 - **NumPyro**: Probabilistic programming and variational inference
 - **PyVista**: 3D mesh processing and visualization
 - **Matplotlib**: Visualization and plotting
